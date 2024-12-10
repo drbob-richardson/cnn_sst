@@ -5,7 +5,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from sklearn.model_selection import KFold
-from sklearn.metrics import accuracy_score, precision_score, recall_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 import os
 
 # Load the dataset and subset to the specified region
@@ -47,29 +47,37 @@ def process_data_multi_res(lead_time, resolution=1, seed=1975):
 
     return data, np.array(labels)
 
-# CNN model definition
-class SimpleCNN(nn.Module):
+# Deeper CNN model definition
+class DeeperCNN(nn.Module):
     def __init__(self, input_channels, input_height, input_width):
-        super(SimpleCNN, self).__init__()
-        self.conv1 = nn.Conv2d(input_channels, 16, kernel_size=4, padding=1)
-        self.conv2 = nn.Conv2d(16, 16, kernel_size=4, padding=1)
+        super(DeeperCNN, self).__init__()
+        self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         # Calculate the size of the flattened features dynamically
         with torch.no_grad():
             sample_input = torch.zeros(1, input_channels, input_height, input_width)
-            sample_output = self.pool(torch.relu(self.conv2(self.pool(torch.relu(self.conv1(sample_input))))))
+            sample_output = self.pool(
+                self.pool(self.pool(self.pool(torch.relu(self.conv4(torch.relu(self.conv3(torch.relu(self.conv2(torch.relu(self.conv1(sample_input)))))))))))
+            )
             self.flattened_size = sample_output.view(-1).size(0)
 
-        self.fc1 = nn.Linear(self.flattened_size, 64)
-        self.fc2 = nn.Linear(64, 1)
+        self.fc1 = nn.Linear(self.flattened_size, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 1)
 
     def forward(self, x):
-        x = self.pool(torch.relu(self.conv1(x)))
+        x = torch.relu(self.conv1(x))
         x = self.pool(torch.relu(self.conv2(x)))
+        x = torch.relu(self.conv3(x))
+        x = self.pool(torch.relu(self.conv4(x)))
         x = x.view(x.size(0), -1)
         x = torch.relu(self.fc1(x))
-        x = self.fc2(x)
+        x = torch.relu(self.fc2(x))
+        x = self.fc3(x)
         return x
 
 # Dataset class
@@ -92,12 +100,12 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
     kf = KFold(n_splits=k_folds, shuffle=True, random_state=42)
 
     best_model = None
-    best_accuracy = 0.0
+    best_f1_score = 0.0
     best_model_state = None
 
     for epoch in range(epochs):
         print(f"Epoch {epoch + 1}/{epochs}")
-        fold_accuracies, fold_precisions, fold_recalls = [], [], []
+        fold_accuracies, fold_precisions, fold_recalls, fold_f1_scores = [], [], [], []
 
         for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
             train_data = torch.utils.data.Subset(dataset, train_idx)
@@ -108,7 +116,7 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
 
             # Define model, loss, and optimizer
             input_height, input_width = data.shape[2], data.shape[3]
-            model = SimpleCNN(input_channels=1, input_height=input_height, input_width=input_width).to(device)
+            model = DeeperCNN(input_channels=1, input_height=input_height, input_width=input_width).to(device)
             criterion = nn.BCEWithLogitsLoss()
             optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -136,28 +144,31 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
             accuracy = accuracy_score(val_labels, val_preds_binary)
             precision = precision_score(val_labels, val_preds_binary, zero_division=1)
             recall = recall_score(val_labels, val_preds_binary, zero_division=1)
+            f1 = f1_score(val_labels, val_preds_binary, zero_division=1)
 
             fold_accuracies.append(accuracy)
             fold_precisions.append(precision)
             fold_recalls.append(recall)
+            fold_f1_scores.append(f1)
 
         # Aggregate metrics across folds for this epoch
         mean_accuracy = np.mean(fold_accuracies)
         mean_precision = np.mean(fold_precisions)
         mean_recall = np.mean(fold_recalls)
+        mean_f1 = np.mean(fold_f1_scores)
 
-        print(f"Epoch {epoch + 1}: Accuracy={mean_accuracy:.4f}, Precision={mean_precision:.4f}, Recall={mean_recall:.4f}")
+        print(f"Epoch {epoch + 1}: Accuracy={mean_accuracy:.4f}, Precision={mean_precision:.4f}, Recall={mean_recall:.4f}, F1 Score={mean_f1:.4f}")
 
         # Check if this is the best model
-        if mean_accuracy > best_accuracy:
-            best_accuracy = mean_accuracy
+        if mean_f1 > best_f1_score:
+            best_f1_score = mean_f1
             best_model_state = model.state_dict()
             best_model = model
 
     # Save the best model
     if best_model_state is not None:
-        torch.save(best_model_state, "best_model.pth")
-        print(f"Best model saved with accuracy={best_accuracy:.4f}")
+        torch.save(best_model_state, "best_model_f1.pth")
+        print(f"Best model saved with F1 Score={best_f1_score:.4f}")
 
 # Run the experiment for a specific resolution and lead time
 resolution = 2  # Modify as needed
