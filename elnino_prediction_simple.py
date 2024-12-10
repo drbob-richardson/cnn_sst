@@ -117,10 +117,15 @@ class DeeperCNN(nn.Module):
         x = self.fc3(x)
         return x
 
-# Training and evaluation function
 def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
     data, labels = process_data_multi_res(lead_time, resolution)
     dataset = SSTDataset(data, labels)
+
+    print("Input data shape:", data.shape)  # Debug: Check shape of data
+    print("Labels shape:", labels.shape)   # Debug: Check shape of labels
+
+    input_height, input_width = data.shape[2], data.shape[3]
+    print(f"Input height: {input_height}, Input width: {input_width}")  # Debug: Height and width
 
     kf = KFold(n_splits=k_folds, shuffle=True, random_state=42)
 
@@ -140,7 +145,6 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
             val_loader = DataLoader(val_data, batch_size=32, shuffle=False)
 
             # Define model, loss, and optimizer
-            input_height, input_width = data.shape[2], data.shape[3]
             model = DeeperCNN(input_channels=1, input_height=input_height, input_width=input_width).to(device)
             criterion = nn.BCEWithLogitsLoss()
             optimizer = optim.Adam(model.parameters(), lr=0.001)
