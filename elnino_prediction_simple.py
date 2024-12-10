@@ -58,7 +58,6 @@ def process_data_multi_res(lead_time, resolution=1, seed=1975):
 
     return data, np.array(labels)
 
-# Deeper CNN model definition
 class DeeperCNN(nn.Module):
     def __init__(self, input_channels, input_height, input_width):
         super(DeeperCNN, self).__init__()
@@ -71,6 +70,7 @@ class DeeperCNN(nn.Module):
         # Dynamically compute flattened size
         with torch.no_grad():
             sample_input = torch.zeros(1, input_channels, input_height, input_width)
+            print("Initial input shape:", sample_input.shape)
             sample_output = self.pool(
                 self.pool(
                     self.pool(
@@ -80,12 +80,31 @@ class DeeperCNN(nn.Module):
                     )
                 )
             )
+            print("Output shape after convolutional layers and pooling:", sample_output.shape)
             self.flattened_size = sample_output.view(-1).size(0)
+            print("Flattened size:", self.flattened_size)
 
         # Fully connected layers
         self.fc1 = nn.Linear(self.flattened_size, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)
+
+    def forward(self, x):
+        print("Input shape:", x.shape)
+        x = torch.relu(self.conv1(x))
+        print("Shape after conv1:", x.shape)
+        x = self.pool(torch.relu(self.conv2(x)))
+        print("Shape after conv2 and pooling:", x.shape)
+        x = torch.relu(self.conv3(x))
+        print("Shape after conv3:", x.shape)
+        x = self.pool(torch.relu(self.conv4(x)))
+        print("Shape after conv4 and pooling:", x.shape)
+        x = x.view(x.size(0), -1)  # Flatten
+        print("Shape after flattening:", x.shape)
+        x = torch.relu(self.fc1(x))
+        x = torch.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
 
     def forward(self, x):
         x = torch.relu(self.conv1(x))
