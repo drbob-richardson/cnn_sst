@@ -58,7 +58,7 @@ def process_data_multi_res(lead_time, resolution=1, seed=1975):
 
     return data, np.array(labels)
 
-# Deeper CNN model definition
+# Deeper CNN model definition with Dropout
 class DeeperCNN(nn.Module):
     def __init__(self, input_channels):
         super(DeeperCNN, self).__init__()
@@ -67,23 +67,33 @@ class DeeperCNN(nn.Module):
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
         self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        
+        # Dropout after pooling layers
+        self.dropout_conv = nn.Dropout2d(p=0.25)
 
-        # Fully connected layers will be dynamically adjusted in forward
+        # Fully connected layers
         self.fc1 = nn.Linear(1, 128)  # Placeholder
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)
 
+        # Dropout for fully connected layers
+        self.dropout_fc = nn.Dropout(p=0.5)
+
     def forward(self, x):
         x = torch.relu(self.conv1(x))
         x = self.pool(torch.relu(self.conv2(x)))
+        x = self.dropout_conv(x)  # Apply dropout after pooling
         x = torch.relu(self.conv3(x))
         x = self.pool(torch.relu(self.conv4(x)))
+        x = self.dropout_conv(x)  # Apply dropout after pooling
         x = x.view(x.size(0), -1)  # Flatten
         if not hasattr(self, "flattened_size"):
             self.flattened_size = x.size(1)
             self.fc1 = nn.Linear(self.flattened_size, 128).to(x.device)
         x = torch.relu(self.fc1(x))
+        x = self.dropout_fc(x)  # Apply dropout after fc1
         x = torch.relu(self.fc2(x))
+        x = self.dropout_fc(x)  # Apply dropout after fc2
         x = self.fc3(x)
         return x
 
@@ -114,7 +124,7 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
 
             model = DeeperCNN(input_channels=input_channels).to(device)
             criterion = nn.BCEWithLogitsLoss()
-            optimizer = optim.Adam(model.parameters(), lr=0.001)
+            optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
             # Training loop
             model.train()
