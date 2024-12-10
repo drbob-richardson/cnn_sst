@@ -58,8 +58,9 @@ def process_data_multi_res(lead_time, resolution=1, seed=1975):
 
     return data, np.array(labels)
 
+# Deeper CNN model definition
 class DeeperCNN(nn.Module):
-    def __init__(self, input_channels, input_height, input_width):
+    def __init__(self, input_channels):
         super(DeeperCNN, self).__init__()
         self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
@@ -67,66 +68,33 @@ class DeeperCNN(nn.Module):
         self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        # Dynamically compute flattened size
-        with torch.no_grad():
-            sample_input = torch.zeros(1, input_channels, input_height, input_width)
-            print("Initial input shape:", sample_input.shape)
-            sample_output = self.pool(
-                self.pool(
-                    self.pool(
-                        self.pool(
-                            torch.relu(self.conv4(torch.relu(self.conv3(torch.relu(self.conv2(torch.relu(self.conv1(sample_input))))))))
-                        )
-                    )
-                )
-            )
-            print("Output shape after convolutional layers and pooling:", sample_output.shape)
-            self.flattened_size = sample_output.view(-1).size(0)
-            print("Flattened size:", self.flattened_size)
-
-        # Fully connected layers
-        self.fc1 = nn.Linear(self.flattened_size, 128)
+        # Fully connected layers will be dynamically adjusted in forward
+        self.fc1 = nn.Linear(1, 128)  # Placeholder
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)
 
     def forward(self, x):
-        print("Input shape:", x.shape)
-        x = torch.relu(self.conv1(x))
-        print("Shape after conv1:", x.shape)
-        x = self.pool(torch.relu(self.conv2(x)))
-        print("Shape after conv2 and pooling:", x.shape)
-        x = torch.relu(self.conv3(x))
-        print("Shape after conv3:", x.shape)
-        x = self.pool(torch.relu(self.conv4(x)))
-        print("Shape after conv4 and pooling:", x.shape)
-        x = x.view(x.size(0), -1)  # Flatten
-        print("Shape after flattening:", x.shape)
-        x = torch.relu(self.fc1(x))
-        x = torch.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-    def forward(self, x):
         x = torch.relu(self.conv1(x))
         x = self.pool(torch.relu(self.conv2(x)))
         x = torch.relu(self.conv3(x))
         x = self.pool(torch.relu(self.conv4(x)))
         x = x.view(x.size(0), -1)  # Flatten
+        if not hasattr(self, "flattened_size"):
+            self.flattened_size = x.size(1)
+            self.fc1 = nn.Linear(self.flattened_size, 128).to(x.device)
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
         return x
 
+# Training and evaluation function
 def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
     data, labels = process_data_multi_res(lead_time, resolution)
+    print("Input data shape:", data.shape)  # Debug: Verify data shape
+    print("Labels shape:", labels.shape)
+
+    input_channels = data.shape[1]  # Should be 1 (channel)
     dataset = SSTDataset(data, labels)
-
-    print("Input data shape:", data.shape)  # Debug: Check shape of data
-    print("Labels shape:", labels.shape)   # Debug: Check shape of labels
-
-    input_height, input_width = data.shape[2], data.shape[3]
-    print(f"Input height: {input_height}, Input width: {input_width}")  # Debug: Height and width
-
     kf = KFold(n_splits=k_folds, shuffle=True, random_state=42)
 
     best_model = None
@@ -144,12 +112,11 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
             train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
             val_loader = DataLoader(val_data, batch_size=32, shuffle=False)
 
-            # Define model, loss, and optimizer
-            model = DeeperCNN(input_channels=1, input_height=input_height, input_width=input_width).to(device)
+            model = DeeperCNN(input_channels=input_channels).to(device)
             criterion = nn.BCEWithLogitsLoss()
             optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-            # Train the model for one epoch
+            # Training loop
             model.train()
             for inputs, labels in train_loader:
                 inputs, labels = inputs.to(device), labels.to(device).view(-1, 1)
@@ -159,7 +126,7 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
                 loss.backward()
                 optimizer.step()
 
-            # Evaluate the model
+            # Evaluation loop
             model.eval()
             val_preds, val_labels = [], []
             with torch.no_grad():
@@ -180,7 +147,7 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
             fold_recalls.append(recall)
             fold_f1_scores.append(f1)
 
-        # Aggregate metrics across folds for this epoch
+        # Aggregate metrics across folds
         mean_accuracy = np.mean(fold_accuracies)
         mean_precision = np.mean(fold_precisions)
         mean_recall = np.mean(fold_recalls)
@@ -188,11 +155,10 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
 
         print(f"Epoch {epoch + 1}: Accuracy={mean_accuracy:.4f}, Precision={mean_precision:.4f}, Recall={mean_recall:.4f}, F1 Score={mean_f1:.4f}")
 
-        # Check if this is the best model
+        # Track the best model
         if mean_f1 > best_f1_score:
             best_f1_score = mean_f1
             best_model_state = model.state_dict()
-            best_model = model
 
     # Save the best model
     if best_model_state is not None:
