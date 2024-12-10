@@ -6,19 +6,30 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-import os
-
-# Load the dataset and subset to the specified region
-file_path = "sst_data.nc"  # Path to the uploaded file
-sst_broad = xr.open_dataset(file_path)['sst'].sel(
-    lat=slice(-15, 15), lon=slice(170, 260)
-)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# SSTDataset class
+class SSTDataset(Dataset):
+    def __init__(self, data, labels):
+        self.data = data
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return torch.tensor(self.data[idx], dtype=torch.float32), torch.tensor(self.labels[idx], dtype=torch.float32)
 
 # Data processing function
 def process_data_multi_res(lead_time, resolution=1, seed=1975):
     torch.manual_seed(seed)
+
+    # Load the dataset and subset to the specified region
+    file_path = "sst_data.nc"  # Path to the uploaded file
+    sst_broad = xr.open_dataset(file_path)['sst'].sel(
+        lat=slice(-15, 15), lon=slice(170, 260)
+    )
 
     # Define the label calculation region (Nino 3.4 region)
     nino34_lat_range = slice(-5, 5)
@@ -47,6 +58,7 @@ def process_data_multi_res(lead_time, resolution=1, seed=1975):
 
     return data, np.array(labels)
 
+# Deeper CNN model definition
 class DeeperCNN(nn.Module):
     def __init__(self, input_channels, input_height, input_width):
         super(DeeperCNN, self).__init__()
@@ -164,7 +176,8 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
         torch.save(best_model_state, "best_model_f1.pth")
         print(f"Best model saved with F1 Score={best_f1_score:.4f}")
 
-# Run the experiment for a specific resolution and lead time
-resolution = 2  # Modify as needed
-lead_time = 12  # Modify as needed
-run_experiment(lead_time=lead_time, resolution=resolution)
+# Main execution
+if __name__ == "__main__":
+    resolution = 2  # Modify as needed
+    lead_time = 12  # Modify as needed
+    run_experiment(lead_time=lead_time, resolution=resolution)
