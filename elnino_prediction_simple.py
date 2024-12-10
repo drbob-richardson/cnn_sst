@@ -90,29 +90,29 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
     dataset = SSTDataset(data, labels)
 
     kf = KFold(n_splits=k_folds, shuffle=True, random_state=42)
-    fold_metrics = []
+
     best_model = None
     best_accuracy = 0.0
     best_model_state = None
 
-    for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
-        print(f"Fold {fold + 1}/{k_folds}")
-        train_data = torch.utils.data.Subset(dataset, train_idx)
-        val_data = torch.utils.data.Subset(dataset, val_idx)
+    for epoch in range(epochs):
+        print(f"Epoch {epoch + 1}/{epochs}")
+        fold_accuracies, fold_precisions, fold_recalls = [], [], []
 
-        train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
-        val_loader = DataLoader(val_data, batch_size=32, shuffle=False)
+        for fold, (train_idx, val_idx) in enumerate(kf.split(dataset)):
+            train_data = torch.utils.data.Subset(dataset, train_idx)
+            val_data = torch.utils.data.Subset(dataset, val_idx)
 
-        # Define model, loss, and optimizer
-        input_height, input_width = data.shape[2], data.shape[3]  # Extract height and width from data
-        model = SimpleCNN(input_channels=1, input_height=input_height, input_width=input_width).to(device)
-        criterion = nn.BCEWithLogitsLoss()
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
+            train_loader = DataLoader(train_data, batch_size=32, shuffle=True)
+            val_loader = DataLoader(val_data, batch_size=32, shuffle=False)
 
-        epoch_metrics = []  # Track out-of-sample metrics for each epoch
+            # Define model, loss, and optimizer
+            input_height, input_width = data.shape[2], data.shape[3]
+            model = SimpleCNN(input_channels=1, input_height=input_height, input_width=input_width).to(device)
+            criterion = nn.BCEWithLogitsLoss()
+            optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-        for epoch in range(epochs):
-            # Train the model
+            # Train the model for one epoch
             model.train()
             for inputs, labels in train_loader:
                 inputs, labels = inputs.to(device), labels.to(device).view(-1, 1)
@@ -136,24 +136,28 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
             accuracy = accuracy_score(val_labels, val_preds_binary)
             precision = precision_score(val_labels, val_preds_binary, zero_division=1)
             recall = recall_score(val_labels, val_preds_binary, zero_division=1)
-            epoch_metrics.append((epoch + 1, accuracy, precision, recall))
 
-            # Check if this is the best model
-            if accuracy > best_accuracy:
-                best_accuracy = accuracy
-                best_model_state = model.state_dict()
-                best_model = model
+            fold_accuracies.append(accuracy)
+            fold_precisions.append(precision)
+            fold_recalls.append(recall)
 
-            print(f"Epoch {epoch + 1}: Accuracy={accuracy:.4f}, Precision={precision:.4f}, Recall={recall:.4f}")
+        # Aggregate metrics across folds for this epoch
+        mean_accuracy = np.mean(fold_accuracies)
+        mean_precision = np.mean(fold_precisions)
+        mean_recall = np.mean(fold_recalls)
 
-        fold_metrics.append(epoch_metrics)
+        print(f"Epoch {epoch + 1}: Accuracy={mean_accuracy:.4f}, Precision={mean_precision:.4f}, Recall={mean_recall:.4f}")
+
+        # Check if this is the best model
+        if mean_accuracy > best_accuracy:
+            best_accuracy = mean_accuracy
+            best_model_state = model.state_dict()
+            best_model = model
 
     # Save the best model
     if best_model_state is not None:
         torch.save(best_model_state, "best_model.pth")
         print(f"Best model saved with accuracy={best_accuracy:.4f}")
-
-    return fold_metrics
 
 # Run the experiment for a specific resolution and lead time
 resolution = 2  # Modify as needed
