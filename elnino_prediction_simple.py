@@ -47,7 +47,6 @@ def process_data_multi_res(lead_time, resolution=1, seed=1975):
 
     return data, np.array(labels)
 
-# Deeper CNN model definition
 class DeeperCNN(nn.Module):
     def __init__(self, input_channels, input_height, input_width):
         super(DeeperCNN, self).__init__()
@@ -57,14 +56,21 @@ class DeeperCNN(nn.Module):
         self.conv4 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        # Calculate the size of the flattened features dynamically
+        # Dynamically compute flattened size
         with torch.no_grad():
             sample_input = torch.zeros(1, input_channels, input_height, input_width)
             sample_output = self.pool(
-                self.pool(self.pool(self.pool(torch.relu(self.conv4(torch.relu(self.conv3(torch.relu(self.conv2(torch.relu(self.conv1(sample_input)))))))))))
+                self.pool(
+                    self.pool(
+                        self.pool(
+                            torch.relu(self.conv4(torch.relu(self.conv3(torch.relu(self.conv2(torch.relu(self.conv1(sample_input))))))))
+                        )
+                    )
+                )
             )
             self.flattened_size = sample_output.view(-1).size(0)
 
+        # Fully connected layers
         self.fc1 = nn.Linear(self.flattened_size, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)
@@ -74,23 +80,11 @@ class DeeperCNN(nn.Module):
         x = self.pool(torch.relu(self.conv2(x)))
         x = torch.relu(self.conv3(x))
         x = self.pool(torch.relu(self.conv4(x)))
-        x = x.view(x.size(0), -1)
+        x = x.view(x.size(0), -1)  # Flatten
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = self.fc3(x)
         return x
-
-# Dataset class
-class SSTDataset(Dataset):
-    def __init__(self, data, labels):
-        self.data = data
-        self.labels = labels
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return torch.tensor(self.data[idx], dtype=torch.float32), torch.tensor(self.labels[idx], dtype=torch.float32)
 
 # Training and evaluation function
 def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
