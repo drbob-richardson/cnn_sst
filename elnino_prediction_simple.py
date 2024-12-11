@@ -28,11 +28,11 @@ def process_data_multi_res(lead_time, resolution=1, seed=1975):
     # Load the dataset and subset to the specified region
     file_path = "sst.mon.mean.nc"  # Updated file path
     sst_broad = xr.open_dataset(file_path)['sst'].sel(
-        lat=slice(-15, 15), lon=slice(170, 260)
+        lat=slice(15,-15), lon=slice(170, 260)
     )
 
     # Define the label calculation region (Nino 3.4 region)
-    nino34_lat_range = slice(-5, 5)
+    nino34_lat_range = slice(5,-5)
     nino34_lon_range = slice(190, 240)
     sst_nino34 = sst_broad.sel(lat=nino34_lat_range, lon=nino34_lon_range)
 
@@ -63,18 +63,18 @@ class SimpleCNN(nn.Module):
     def __init__(self, input_channels):
         super(SimpleCNN, self).__init__()
         self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(32,64, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         
         # Dropout after pooling layers
-        self.dropout_conv = nn.Dropout2d(p=0.25)
+        self.dropout_conv = nn.Dropout2d(p=0.1)
 
         # Fully connected layers
-        self.fc1 = nn.Linear(1, 128)  # Placeholder
-        self.fc2 = nn.Linear(128, 1)
+        self.fc1 = nn.Linear(1, 16)  # Placeholder
+        self.fc2 = nn.Linear(16, 1)
 
         # Dropout for fully connected layers
-        self.dropout_fc = nn.Dropout(p=0.5)
+        self.dropout_fc = nn.Dropout(p=0.1)
 
     def forward(self, x):
         x = torch.relu(self.conv1(x))
@@ -83,7 +83,7 @@ class SimpleCNN(nn.Module):
         x = x.view(x.size(0), -1)  # Flatten
         if not hasattr(self, "flattened_size"):
             self.flattened_size = x.size(1)
-            self.fc1 = nn.Linear(self.flattened_size, 128).to(x.device)
+            self.fc1 = nn.Linear(self.flattened_size, 16).to(x.device)
         x = torch.relu(self.fc1(x))
         x = self.dropout_fc(x)  # Apply dropout after fc1
         x = self.fc2(x)
@@ -169,6 +169,6 @@ def run_experiment(lead_time=12, resolution=1, epochs=50, k_folds=5):
 
 # Main execution
 if __name__ == "__main__":
-    resolution = 2  # Modify as needed
-    lead_time = 12  # Modify as needed
+    resolution = 3  # Modify as needed
+    lead_time = 1  # Modify as needed
     run_experiment(lead_time=lead_time, resolution=resolution)
