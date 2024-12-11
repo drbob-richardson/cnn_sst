@@ -13,10 +13,10 @@ from elnino_prediction_simple import process_data_multi_res
 class SimpleCNN(nn.Module):
     def __init__(self, input_channels=1, input_height=30, input_width=90):
         super(SimpleCNN, self).__init__()
-        self.conv1 = nn.Conv2d(input_channels, 16, kernel_size=4, padding=1)  # First convolutional layer
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=4, padding=1)              # Second convolutional layer
-        self.pool = nn.MaxPool2d(kernel_size=4, stride=2)                     # Max pooling layer
-        self.dropout = nn.Dropout(p=0.5)
+        self.conv1 = nn.Conv2d(input_channels, 16, kernel_size=3, padding=1)  # First convolutional layer
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)              # Second convolutional layer
+        self.pool = nn.MaxPool2d(kernel_size=3, stride=2)                     # Max pooling layer
+        self.dropout = nn.Dropout(p=0.1)
 
         # Dynamically calculate the flattened size based on input dimensions
         with torch.no_grad():
@@ -24,8 +24,8 @@ class SimpleCNN(nn.Module):
             sample_output = self._forward_features(sample_input)
             self.flattened_size = sample_output.view(-1).size(0)
 
-        self.fc1 = nn.Linear(self.flattened_size, 64)
-        self.fc2 = nn.Linear(64, 1)
+        self.fc1 = nn.Linear(self.flattened_size, 128)
+        self.fc2 = nn.Linear(128, 1)
 
     def _forward_features(self, x):
         x = self.pool(torch.relu(self.conv1(x)))  # First conv-pool
