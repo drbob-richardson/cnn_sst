@@ -29,22 +29,33 @@ class MultiResCNN(nn.Module):
         self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x_res1, x_resk):
+        # Reshape inputs if they have an extra dimension
+        if len(x_res1.shape) == 5:  # If input has 5 dimensions
+            x_res1 = x_res1.view(-1, x_res1.size(2), x_res1.size(3), x_res1.size(4))  # Combine batch and sequence dims
+        if len(x_resk.shape) == 5:
+            x_resk = x_resk.view(-1, x_resk.size(2), x_resk.size(3), x_resk.size(4))
+
+        # Process resolution 1 independently
         x1 = self.pool_res1(torch.relu(self.conv1_res1(x_res1)))
         x1 = self.pool_res1(torch.relu(self.conv2_res1(x1)))
-        x1 = x1.reshape(x1.size(0), -1)
+        x1 = x1.reshape(x1.size(0), -1)  # Flatten
 
+        # Process resolution k independently
         xk = self.pool_resk(torch.relu(self.conv1_resk(x_resk)))
         xk = self.pool_resk(torch.relu(self.conv2_resk(xk)))
-        xk = xk.reshape(xk.size(0), -1)
+        xk = xk.reshape(xk.size(0), -1)  # Flatten
 
+        # Concatenate flattened outputs
         x = torch.cat([x1, xk], dim=1)
 
+        # Dynamically adjust fully connected layer if needed
         if x.size(1) != self.fc1.in_features:
             self.fc1 = nn.Linear(x.size(1), 128).to(x.device)
 
         x = torch.relu(self.fc1(x))
         x = torch.sigmoid(self.fc2(x))
         return x
+
 
 # Function to compute and save saliency maps
 def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, resolution_k, device):
