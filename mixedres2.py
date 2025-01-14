@@ -47,23 +47,28 @@ class MultiResCNN(nn.Module):
         return x
 
 # Function to compute and save saliency maps
-def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, resolution_k):
+def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, resolution_k, device):
     """
     Compute and save saliency maps for both resolutions (res1 and resk).
 
     Args:
         model: Trained PyTorch model.
-        inputs: Tuple of input tensors (data_res1, data_resk).
-        labels: Ground-truth labels.
+        inputs: Tuple of input arrays (data_res1, data_resk).
+        labels: Ground-truth labels (NumPy array).
         save_dir: Directory to save the saliency plots.
         lead_time: Lead time for the data.
         resolution_k: Resolution level k.
+        device: PyTorch device (CPU or GPU).
     """
     model.eval()
+
+    # Convert inputs and labels to PyTorch tensors
     data_res1, data_resk = inputs
+    data_res1 = torch.tensor(data_res1, dtype=torch.float32, requires_grad=True).to(device)
+    data_resk = torch.tensor(data_resk, dtype=torch.float32, requires_grad=True).to(device)
+    labels = torch.tensor(labels, dtype=torch.float32).to(device)
 
     # Compute saliency for resolution 1
-    data_res1.requires_grad = True
     outputs_res1 = model(data_res1.unsqueeze(0), data_resk.unsqueeze(0))
     loss_res1 = nn.BCELoss()(outputs_res1.squeeze(), labels)
     loss_res1.backward()
@@ -78,8 +83,12 @@ def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, resolu
     plt.savefig(os.path.join(save_dir, f"saliency_lead_{lead_time}_res_1.png"))
     plt.close()
 
+    # Reset gradients
+    model.zero_grad()
+    data_res1.grad = None
+    data_resk.grad = None
+
     # Compute saliency for resolution k
-    data_resk.requires_grad = True
     outputs_resk = model(data_res1.unsqueeze(0), data_resk.unsqueeze(0))
     loss_resk = nn.BCELoss()(outputs_resk.squeeze(), labels)
     loss_resk.backward()
@@ -93,6 +102,7 @@ def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, resolu
     plt.colorbar()
     plt.savefig(os.path.join(save_dir, f"saliency_lead_{lead_time}_res_{resolution_k}.png"))
     plt.close()
+
 
 
 # Define training and evaluation function
