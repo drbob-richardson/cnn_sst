@@ -1,13 +1,13 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score
 import numpy as np
 from sklearn.model_selection import KFold
 import pandas as pd
-
-# Assuming process_data_multi_res is already implemented in elnino_prediction_simple.py
+import matplotlib.pyplot as plt
 from elnino_prediction_simple import process_data_multi_res
 
 # Define the 2D CNN architecture
@@ -24,25 +24,21 @@ class MultiResCNN(nn.Module):
         self.conv2_resk = nn.Conv2d(8, 16, kernel_size=3, padding=1)
         self.pool_resk = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        # Fully connected layers (initialize with placeholder size, updated in forward pass)
+        # Fully connected layers
         self.fc1 = nn.Linear(1, 128)  # Placeholder size; will adjust dynamically
         self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x_res1, x_resk):
-        # Process resolution 1 independently
         x1 = self.pool_res1(torch.relu(self.conv1_res1(x_res1)))
         x1 = self.pool_res1(torch.relu(self.conv2_res1(x1)))
-        x1 = x1.reshape(x1.size(0), -1)  # Flatten
+        x1 = x1.reshape(x1.size(0), -1)
 
-        # Process resolution k independently
         xk = self.pool_resk(torch.relu(self.conv1_resk(x_resk)))
         xk = self.pool_resk(torch.relu(self.conv2_resk(xk)))
-        xk = xk.reshape(xk.size(0), -1)  # Flatten
+        xk = xk.reshape(xk.size(0), -1)
 
-        # Concatenate flattened outputs
         x = torch.cat([x1, xk], dim=1)
 
-        # Dynamically adjust fully connected layer if needed
         if x.size(1) != self.fc1.in_features:
             self.fc1 = nn.Linear(x.size(1), 128).to(x.device)
 
@@ -50,7 +46,56 @@ class MultiResCNN(nn.Module):
         x = torch.sigmoid(self.fc2(x))
         return x
 
-# Define a function to train and evaluate the model
+# Function to compute and save saliency maps
+def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, resolution_k):
+    """
+    Compute and save saliency maps for both resolutions (res1 and resk).
+
+    Args:
+        model: Trained PyTorch model.
+        inputs: Tuple of input tensors (data_res1, data_resk).
+        labels: Ground-truth labels.
+        save_dir: Directory to save the saliency plots.
+        lead_time: Lead time for the data.
+        resolution_k: Resolution level k.
+    """
+    model.eval()
+    data_res1, data_resk = inputs
+
+    # Compute saliency for resolution 1
+    data_res1.requires_grad = True
+    outputs_res1 = model(data_res1.unsqueeze(0), data_resk.unsqueeze(0))
+    loss_res1 = nn.BCELoss()(outputs_res1.squeeze(), labels)
+    loss_res1.backward()
+
+    saliency_res1 = data_res1.grad.abs().squeeze().cpu().numpy()
+
+    # Plot and save saliency map for resolution 1
+    plt.figure(figsize=(8, 6))
+    plt.title(f"Saliency Map (Lead Time: {lead_time}, Resolution: 1)")
+    plt.imshow(saliency_res1, cmap="hot")
+    plt.colorbar()
+    plt.savefig(os.path.join(save_dir, f"saliency_lead_{lead_time}_res_1.png"))
+    plt.close()
+
+    # Compute saliency for resolution k
+    data_resk.requires_grad = True
+    outputs_resk = model(data_res1.unsqueeze(0), data_resk.unsqueeze(0))
+    loss_resk = nn.BCELoss()(outputs_resk.squeeze(), labels)
+    loss_resk.backward()
+
+    saliency_resk = data_resk.grad.abs().squeeze().cpu().numpy()
+
+    # Plot and save saliency map for resolution k
+    plt.figure(figsize=(8, 6))
+    plt.title(f"Saliency Map (Lead Time: {lead_time}, Resolution: {resolution_k})")
+    plt.imshow(saliency_resk, cmap="hot")
+    plt.colorbar()
+    plt.savefig(os.path.join(save_dir, f"saliency_lead_{lead_time}_res_{resolution_k}.png"))
+    plt.close()
+
+
+# Define training and evaluation function
 def train_and_evaluate(data_res1, data_resk, labels, model, criterion, optimizer, device, num_epochs=10):
     kf = KFold(n_splits=5, shuffle=True, random_state=42)
     metrics = {
@@ -100,10 +145,6 @@ def train_and_evaluate(data_res1, data_resk, labels, model, criterion, optimizer
 
     return metrics
 
-
-import joblib  # For saving model-related data
-import os
-
 # Main script
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -111,14 +152,13 @@ lead_times = range(1, 19)
 resolutions = [1, 2, 3, 5, 6]
 
 results = []
-saliency_data = []
 
-# Create directories to save data
-os.makedirs("saliency_data", exist_ok=True)
+# Create directory for saliency plots
+os.makedirs("saliency_plots", exist_ok=True)
 
 for lead_time in lead_times:
     for k in resolutions:
-        # Prepare data for the given lead time and resolutions
+        # Prepare data
         data_res1, labels = process_data_multi_res(lead_time, 1)
         data_resk, _ = process_data_multi_res(lead_time, k)
 
@@ -127,10 +167,10 @@ for lead_time in lead_times:
         criterion = nn.BCELoss()
         optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-        # Train and evaluate the model
+        # Train and evaluate
         metrics = train_and_evaluate(data_res1, data_resk, labels, model, criterion, optimizer, device)
 
-        # Aggregate results
+        # Save metrics
         results.append({
             'lead_time': lead_time,
             'resolution_k': k,
@@ -140,22 +180,12 @@ for lead_time in lead_times:
             'out_sample_f1': np.mean(metrics['out_sample_f1'])
         })
 
-        # Save information for saliency map computation
-        saliency_info = {
-            "lead_time": lead_time,
-            "resolution_k": k,
-            "inputs_res1": data_res1,  # Save the inputs for resolution 1
-            "inputs_resk": data_resk,  # Save the inputs for resolution k
-            "labels": labels,          # Ground-truth labels
-            "model_state": model.state_dict(),  # Model state
-            "device": str(device)               # Device info
-        }
-        saliency_data.append(saliency_info)
+        # Compute and save saliency map
+        save_dir = os.path.join("saliency_plots", f"lead_{lead_time}_res_{k}")
+        os.makedirs(save_dir, exist_ok=True)
+        compute_and_save_saliency(model, (data_res1, data_resk), labels, save_dir, lead_time, k)
+
 
 # Save results to a CSV file
 results_df = pd.DataFrame(results)
 results_df.to_csv('elnino_results_multires.csv', index=False)
-
-# Save saliency data using joblib
-joblib.dump(saliency_data, "saliency_data/saliency_data.pkl")
-
