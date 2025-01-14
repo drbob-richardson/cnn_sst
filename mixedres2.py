@@ -79,12 +79,18 @@ def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, resolu
     data_resk = torch.tensor(data_resk, dtype=torch.float32, requires_grad=True).to(device)
     labels = torch.tensor(labels, dtype=torch.float32).to(device)
 
-    # Compute saliency for resolution 1
-    outputs_res1 = model(data_res1.unsqueeze(0), data_resk.unsqueeze(0))
-    loss_res1 = nn.BCELoss()(outputs_res1.squeeze(), labels)
-    loss_res1.backward()
+    # Retain gradients for saliency computation
+    data_res1.retain_grad()
+    data_resk.retain_grad()
 
+    # Compute saliency for resolution 1
+    outputs = model(data_res1, data_resk)
+    loss = nn.BCELoss()(outputs.squeeze(), labels)
+    loss.backward()
+
+    # Extract saliency maps
     saliency_res1 = data_res1.grad.abs().squeeze().cpu().numpy()
+    saliency_resk = data_resk.grad.abs().squeeze().cpu().numpy()
 
     # Plot and save saliency map for resolution 1
     plt.figure(figsize=(8, 6))
@@ -93,18 +99,6 @@ def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, resolu
     plt.colorbar()
     plt.savefig(os.path.join(save_dir, f"saliency_lead_{lead_time}_res_1.png"))
     plt.close()
-
-    # Reset gradients
-    model.zero_grad()
-    data_res1.grad = None
-    data_resk.grad = None
-
-    # Compute saliency for resolution k
-    outputs_resk = model(data_res1.unsqueeze(0), data_resk.unsqueeze(0))
-    loss_resk = nn.BCELoss()(outputs_resk.squeeze(), labels)
-    loss_resk.backward()
-
-    saliency_resk = data_resk.grad.abs().squeeze().cpu().numpy()
 
     # Plot and save saliency map for resolution k
     plt.figure(figsize=(8, 6))
