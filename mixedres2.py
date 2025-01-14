@@ -193,7 +193,7 @@ for lead_time in lead_times:
         # Compute and save saliency map
         save_dir = os.path.join("saliency_plots", f"lead_{lead_time}_res_{k}")
         os.makedirs(save_dir, exist_ok=True)
-        compute_and_save_saliency(model, (data_res1, data_resk), labels, save_dir, lead_time, k)
+        compute_and_save_saliency(model, (data_res1, data_resk), labels, save_dir, lead_time, k, device)
 
 
 # Save results to a CSV file
