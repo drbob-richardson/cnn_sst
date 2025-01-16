@@ -96,7 +96,53 @@ def compute_and_save_saliency(model, inputs, labels, save_dir, lead_time, device
     plt.close()
 
 # Define training and evaluation function
-# (Unchanged, see original code)
+def train_and_evaluate(data_res1, labels, model, criterion, optimizer, device, num_epochs=10):
+    kf = KFold(n_splits=5, shuffle=True, random_state=42)
+    metrics = {
+        'in_sample_accuracy': [],
+        'out_sample_accuracy': [],
+        'in_sample_f1': [],
+        'out_sample_f1': []
+    }
+
+    for train_index, test_index in kf.split(data_res1):
+        X_train, X_test = data_res1[train_index], data_res1[test_index]
+        y_train, y_test = labels[train_index], labels[test_index]
+
+        X_train = torch.tensor(X_train).float().to(device)
+        X_test = torch.tensor(X_test).float().to(device)
+        y_train = torch.tensor(y_train).float().to(device)
+        y_test = torch.tensor(y_test).float().to(device)
+
+        train_loader = DataLoader(list(zip(X_train, y_train)), batch_size=32, shuffle=True)
+        test_loader = DataLoader(list(zip(X_test, y_test)), batch_size=32, shuffle=False)
+
+        # Train the model
+        for epoch in range(num_epochs):
+            model.train()
+            for inputs, targets in train_loader:
+                inputs, targets = inputs.to(device), targets.to(device)
+                optimizer.zero_grad()
+                outputs = model(inputs)
+                loss = criterion(outputs.squeeze(), targets)
+                loss.backward()
+                optimizer.step()
+
+        # Evaluate the model
+        model.eval()
+        with torch.no_grad():
+            y_train_pred = (model(X_train).squeeze() > 0.5).cpu().numpy()
+            y_test_pred = (model(X_test).squeeze() > 0.5).cpu().numpy()
+
+        # Calculate metrics
+        metrics['in_sample_accuracy'].append(accuracy_score(y_train.cpu(), y_train_pred))
+        metrics['out_sample_accuracy'].append(accuracy_score(y_test.cpu(), y_test_pred))
+        metrics['in_sample_f1'].append(f1_score(y_train.cpu(), y_train_pred))
+        metrics['out_sample_f1'].append(f1_score(y_test.cpu(), y_test_pred))
+
+    return metrics
+
+
 
 # Main script
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
