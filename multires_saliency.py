@@ -4,7 +4,7 @@ import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
 from elnino_prediction_simple import process_data_multi_res
-from mixedres import MultiResCNN  # Assuming the mixed resolution model is saved in mixedres.py
+from mixedres1 import MultiResCNN  # Assuming the mixed resolution model is saved in mixedres.py
 
 # Function to compute and save saliency maps for mixed-resolution model
 def compute_and_save_saliency_mixed_res(model, inputs_res1, inputs_resk, labels, save_dir, lead_time, resolution_k, device):
