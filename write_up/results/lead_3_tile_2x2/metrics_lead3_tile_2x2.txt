@@ -1,0 +1,7 @@
+accuracy: 0.8350
+precision: 0.6071
+recall: 0.7391
+f1: 0.6667
+auroc: 0.8837
+auprc: 0.7488
+runtime_sec: 8.3270

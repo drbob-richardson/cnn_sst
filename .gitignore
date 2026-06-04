@@ -1,4 +1,25 @@
-/sst.mon.mean.nc
-/sst.mon.mean-2.nc
-Data/sst.mon.mean.nc
-Data/sst.mon.mean-2.nc
+# ---- Large binaries (kept locally, not versioned) ----
+# Datasets
+*.nc
+data/*.nc
+# Trained model weights
+*.pth
+models/*.pth
+# Rendered videos
+*.mp4
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# ---- Run logs / scratch ----
+*.log
+
+# ---- OS / editor ----
+.DS_Store
+*.swp

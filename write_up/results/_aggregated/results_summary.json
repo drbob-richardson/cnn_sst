@@ -1,0 +1,222 @@
+[
+  {
+    "lead": 3,
+    "gate": "none",
+    "accuracy": 0.767,
+    "precision": 0.5385,
+    "recall": 0.5385,
+    "f1": NaN,
+    "auroc": 0.8526,
+    "auprc": 0.6156,
+    "runtime_sec": 4.8685
+  },
+  {
+    "lead": 3,
+    "gate": "pixel",
+    "accuracy": 0.7767,
+    "precision": 0.5652,
+    "recall": 0.5,
+    "f1": NaN,
+    "auroc": 0.8621,
+    "auprc": 0.6336,
+    "runtime_sec": 2285.2859
+  },
+  {
+    "lead": 3,
+    "gate": "tile_2x2",
+    "accuracy": 0.835,
+    "precision": 0.6071,
+    "recall": 0.7391,
+    "f1": NaN,
+    "auroc": 0.8837,
+    "auprc": 0.7488,
+    "runtime_sec": 8.327
+  },
+  {
+    "lead": 3,
+    "gate": "tile_4x4",
+    "accuracy": 0.767,
+    "precision": 0.35,
+    "recall": 0.3889,
+    "f1": NaN,
+    "auroc": 0.8124,
+    "auprc": 0.56,
+    "runtime_sec": 4.1228
+  },
+  {
+    "lead": 6,
+    "gate": "none",
+    "accuracy": 0.7184,
+    "precision": 0.375,
+    "recall": 0.1111,
+    "f1": NaN,
+    "auroc": 0.7222,
+    "auprc": 0.4026,
+    "runtime_sec": 2.9349
+  },
+  {
+    "lead": 6,
+    "gate": "pixel",
+    "accuracy": 0.7184,
+    "precision": 0.3333,
+    "recall": 0.0357,
+    "f1": NaN,
+    "auroc": 0.6005,
+    "auprc": 0.3336,
+    "runtime_sec": 654.463
+  },
+  {
+    "lead": 6,
+    "gate": "tile_2x2",
+    "accuracy": 0.7087,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.7402,
+    "auprc": 0.4783,
+    "runtime_sec": 3.1093
+  },
+  {
+    "lead": 6,
+    "gate": "tile_4x4",
+    "accuracy": 0.7864,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.7699,
+    "auprc": 0.3938,
+    "runtime_sec": 3.0983
+  },
+  {
+    "lead": 9,
+    "gate": "none",
+    "accuracy": 0.7647,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.6522,
+    "auprc": 0.3136,
+    "runtime_sec": 2.9254
+  },
+  {
+    "lead": 9,
+    "gate": "pixel",
+    "accuracy": 0.6667,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.6237,
+    "auprc": 0.4329,
+    "runtime_sec": 723.9167
+  },
+  {
+    "lead": 9,
+    "gate": "tile_2x2",
+    "accuracy": 0.7353,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.6835,
+    "auprc": 0.3867,
+    "runtime_sec": 3.5799
+  },
+  {
+    "lead": 9,
+    "gate": "tile_4x4",
+    "accuracy": 0.6667,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.5913,
+    "auprc": 0.3925,
+    "runtime_sec": 3.0625
+  },
+  {
+    "lead": 12,
+    "gate": "none",
+    "accuracy": 0.7451,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.663,
+    "auprc": 0.3731,
+    "runtime_sec": 2.9004
+  },
+  {
+    "lead": 12,
+    "gate": "pixel",
+    "accuracy": 0.7549,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.6592,
+    "auprc": 0.3651,
+    "runtime_sec": 603.0286
+  },
+  {
+    "lead": 12,
+    "gate": "tile_2x2",
+    "accuracy": 0.7745,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.5234,
+    "auprc": 0.2416,
+    "runtime_sec": 3.0663
+  },
+  {
+    "lead": 12,
+    "gate": "tile_4x4",
+    "accuracy": 0.7255,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.6404,
+    "auprc": 0.3666,
+    "runtime_sec": 3.0438
+  },
+  {
+    "lead": 15,
+    "gate": "none",
+    "accuracy": 0.7624,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.7278,
+    "auprc": 0.406,
+    "runtime_sec": 3.3534
+  },
+  {
+    "lead": 15,
+    "gate": "pixel",
+    "accuracy": 0.7525,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.7695,
+    "auprc": 0.4925,
+    "runtime_sec": 652.0341
+  },
+  {
+    "lead": 15,
+    "gate": "tile_2x2",
+    "accuracy": 0.7624,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.7002,
+    "auprc": 0.3746,
+    "runtime_sec": 3.0379
+  },
+  {
+    "lead": 15,
+    "gate": "tile_4x4",
+    "accuracy": 0.7228,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": NaN,
+    "auroc": 0.8126,
+    "auprc": 0.6053,
+    "runtime_sec": 3.0282
+  }
+]
