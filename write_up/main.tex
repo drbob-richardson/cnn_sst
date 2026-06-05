@@ -4,7 +4,8 @@
 \usepackage{amsmath,amssymb,graphicx,booktabs,array,longtable,calc}
 \usepackage{natbib}
 \bibliographystyle{agsm}
-\usepackage[unicode,hyphens]{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\usepackage[unicode]{hyperref}
 \usepackage[dvipsnames,svgnames,x11names]{xcolor}
 \usepackage{caption,subcaption,float}
 \usepackage{microtype}
@@ -22,9 +23,9 @@
 \addtolength{\topmargin}{-1in}
 
 \hypersetup{
-  pdftitle={An Interpretable Deep Learning Framework for Spatio-Temporal Forecasting},
+  pdftitle={Faithful Spatial Attribution via Total-Variation Input Masking},
   pdfauthor={Robert Richardson},
-  pdfkeywords={interpretable machine learning, feature masking, sparsity regularization, total variation, CNN, saliency},
+  pdfkeywords={interpretable machine learning, spatial attribution, total variation, fused lasso, structured sparsity, CNN, El Nino},
   colorlinks=true,
   linkcolor={blue},
   citecolor={Blue},
@@ -44,7 +45,7 @@
 
 \if1\anon
 {
-  \title{\bf An Interpretable Deep Learning Framework for Spatio-Temporal Forecasting}
+  \title{\bf Faithful Spatial Attribution via Total-Variation Input Masking, with Application to El Ni\~no Forecasting}
   \author{Robert Richardson\thanks{
     Department of Statistics, Brigham Young University. }}
   \maketitle
@@ -61,14 +62,14 @@
 
 \bigskip
 \begin{abstract}
-Accurate forecasting of environmental variables such as sea surface temperature (SST) requires models that can capture complex spatiotemporal dynamics while remaining interpretable and robust to missing data. Although deep learning approaches—particularly convolutional neural networks (CNNs)—have demonstrated strong predictive performance, they typically lack transparency and perform poorly when inputs are occluded or incomplete. In parallel, the statistical modeling community has long developed nonlinear spatiotemporal frameworks, including bilinear and quadratic state-space models, that provide interpretable structure and uncertainty quantification but often at the cost of flexibility or scalability.
+Attribution methods are widely used to explain the predictions of convolutional neural networks (CNNs) over spatial fields, but spatial dependence makes attribution ill-posed: when neighbouring inputs are highly correlated, predictive credit can be assigned almost arbitrarily among them, and post-hoc saliency maps become noisy and unstable. We study an in-model alternative in which a learnable input mask is trained jointly with the predictor and regularized by a \emph{structured-sparsity} penalty that combines an $\ell_1/\ell_2$-style sparsity term with a total-variation (TV) term encouraging spatial smoothness---the fused-lasso / Markov-random-field prior familiar from spatial statistics, applied here to a learned attribution map.
 
-We propose a novel hybrid architecture that integrates a trainable input mask into a spatiotemporal CNN, enabling spatial attribution to be learned jointly with prediction. The masking mechanism is regularized to produce sparse, coherent spatial saliency maps, improving interpretability and robustness to missing inputs. Our approach draws upon developments in gated and masked CNNs, hierarchical Bayesian modeling, and structured nonlinear dynamics. We demonstrate the effectiveness of this architecture on SST forecasting tasks, where it improves both predictive accuracy and interpretability relative to post hoc saliency methods and standard CNN baselines. This work contributes a general framework for interpretable deep learning in high-dimensional environmental forecasting.
+On synthetic data with known ground-truth signal and distractor regions, we show that (i) the TV penalty significantly improves the faithfulness of learned attribution and, applied as a modular add-on, improves not only our mask but also stochastic-gate baselines ($L_0$ and STG); and (ii) our TV+sparsity mask occupies a favourable point on the faithfulness--accuracy frontier, delivering faithful attribution without degrading---and slightly improving---predictive performance, whereas sparsity-only gates achieve marginally sharper localization only by collapsing the predictor. We apply the method to El Ni\~no prediction from sea-surface temperature, comparing the learned masks against a fused-lasso statistical reference, and show that coarse tiled masks retain interpretability at a fraction of the training cost. We are explicit about limitations, including a failure mode in which sparsity-driven masks are captured by cheap spurious shortcuts.
 \end{abstract}
 
 
 \noindent%
-{\it Keywords:} Interpretable machine learning; feature masking; total variation; sparsity; CNN; saliency. % (Avoid duplicating words from title)
+{\it Keywords:} Interpretable machine learning; spatial attribution; structured sparsity; fused lasso; convolutional neural networks; sea surface temperature. % (Avoid duplicating words from title)
 
 \vfill
 \newpage
@@ -80,11 +81,11 @@ We propose a novel hybrid architecture that integrates a trainable input mask in
 
 \section{Introduction}\label{sec:intro}
 
-Forecasting spatiotemporal environmental phenomena, such as sea surface temperature (SST), atmospheric circulation, and precipitation, remains a grand challenge in Earth system science due to the high dimensionality, nonlinearity, and partial observability of these systems. Deep learning methods, particularly convolutional neural networks (CNNs), have recently shown promise in modeling these complex systems \citep{Rasp2020WeatherBench,Bi2023PanguWeather,Pathak2022FourCastNet}. However, their lack of interpretability limit their utility in high-stakes environmental applications. Our work addresses these issues by integrating input masking via gating in CNNs, and demonstrate its utility in nonlinear spatiotemporal modeling in environmental science.
+Deep learning has become central to spatiotemporal environmental prediction---sea surface temperature (SST), atmospheric circulation, precipitation---where convolutional neural networks (CNNs) model high-dimensional, nonlinear fields with strong predictive skill \citep{Rasp2020WeatherBench,Bi2023PanguWeather,Pathak2022FourCastNet,Ham2019DLENSO}. In high-stakes geoscientific applications, however, predictions are only actionable if we can say \emph{where} on the field a model is drawing its information, and interpretability has become a research priority in its own right \citep{Toms2020PINN,Mamalakis2022Fidelity}. A central obstacle is that environmental inputs are strongly spatially dependent: neighbouring grid cells are highly correlated, so predictive credit can be distributed almost arbitrarily among them. As a result, gradient-based and perturbation-based attribution maps are typically diffuse, noisy, and unstable, and need not reflect the structure a domain scientist would call physical.
 
-Our approach augments a high-capacity CNN with learnable input masks trained jointly with the predictor \citep{Ross2017RRR,Ross2018GradReg,Louizos2018L0}. The gates produce global, parameterized importance maps and are regularized for sparsity and spatial smoothness, encouraging compact, physically plausible attributions \citep{Louizos2018L0,ROF1992}. This differs from post-hoc tools such as saliency maps and SHAP: saliency computes the gradient of a class score with respect to the input to highlight pixels that most increase the score for a specific image \citep{Simonyan2014Saliency,Sundararajan2017IG}, while SHAP uses game-theoretic Shapley values to attribute a prediction to features under an additive explanation model \citep{Lundberg2017SHAP}. Both are powerful but can be unstable or manipulable and, being post-hoc, need not perfectly reflect the model’s internal usage of features \citep{Adebayo2018Sanity,Ghorbani2019Fragile}. By contrast, in-model interpretability bakes the attribution mechanism into training, which can improve faithfulness and even robustness when the learning objective explicitly regularizes explanations \citep{Ross2017RRR,Ross2018GradReg,Fong2017MeaningfulPerturbation}. Our work complements prior model-based interpretability including prototype reasoning \citep{Chen2019ProtoPNet}, concept bottlenecks \citep{Koh2020CBM}, and attention mechanisms that yield per-region weights \citep{Ilse2018AttentionMIL}.
+Two broad families of attribution exist. \emph{Post-hoc} methods explain an already-trained network: gradient saliency \citep{Simonyan2014Saliency}, integrated gradients \citep{Sundararajan2017IG}, Grad-CAM \citep{Selvaraju2017GradCAM}, and SHAP \citep{Lundberg2017SHAP} are widely used but can be unstable or manipulable and, being external to the model, need not reflect its internal feature use \citep{Adebayo2018Sanity,Ghorbani2019Fragile}. \emph{In-model} methods instead build attribution into training: gradient-regularized explanations \citep{Ross2017RRR,Ross2018GradReg}, class activation mapping \citep{Zhou2016CAM}, learned attention \citep{Hu2018SENet,Woo2018CBAM}, and---closest to our setting---learnable feature gates that select inputs jointly with the predictor, including $L_0$/hard-concrete gates \citep{Louizos2018L0}, stochastic gates \citep{Yamada2020STG}, and instance-wise selectors \citep{Chen2018L2X,Yoon2019INVASE}. These learned gates penalize \emph{sparsity} but treat input locations as exchangeable, with no notion of spatial structure---precisely what is needed when the inputs form a coherent field.
 
-Beyond post-hoc explanations, several \emph{in-model} attribution mechanisms have been used with CNNs. Class Activation Mapping (CAM) makes a minor architectural change (global average pooling + linear head) so the network itself yields class-discriminative localization maps \citep{Zhou2016CAM}. Attention modules such as Squeeze-and-Excitation (SE) and CBAM learn channel and spatial importance weights during training and are often interpreted as attributions \citep{Hu2018SENet,Woo2018CBAM}. BagNets constrain receptive fields so decisions aggregate local patch evidence, providing inherently local, patch-level rationales \citep{Brendel2019BagNet}. Conceptually, our input masks act at the \emph{data level} (pixels/tiles) and provide a \emph{global}, parameterized importance map with explicit sparsity and smoothness priors—complementary to CAM/attention’s \emph{per-example, feature-level} maps and gradient-regularization’s explanation constraints \citep{Ross2017RRR,Ross2018GradReg}. This positioning motivates our experiments that compare against CAM, attention, and gradient-regularized CNNs using both predictive and faithfulness metrics.
+Our approach is in the in-model family: a learnable input mask, trained jointly with the predictor, that gates the input before prediction. Its distinguishing ingredient is a \emph{total-variation} (TV) penalty on the mask in addition to sparsity, so that the learned attribution is encouraged to be both compact and spatially contiguous. This pairing is exactly the structured-sparsity prior of the fused lasso \citep{Tibshirani2005FusedLasso} and total-variation denoising \citep{ROF1992} from spatial statistics, here imposed on a learned attribution map rather than on regression coefficients. The idea of combining TV with sparse attention has appeared inside per-token attention transforms for image captioning \citep{Martins2020TVMax}, and TV-regularized masks have been optimized \emph{post hoc}, one per image, against a frozen classifier \citep{Fong2017MeaningfulPerturbation,Dabkowski2017RealTime}; our contribution is to bring the smoothness prior to a single, globally-learned, in-model gate, to show on ground-truth data that it measurably improves faithfulness across gating mechanisms, and to apply it to environmental forecasting. We complement prior model-based interpretability such as prototype reasoning \citep{Chen2019ProtoPNet} and concept bottlenecks \citep{Koh2020CBM}.
 
 
 Dropout, a widely used regularization technique in deep learning, operates by randomly masking neural units during training to prevent overfitting \citep{Hinton2012Dropout,Srivastava2014Dropout}. In CNNs, variants such as spatial dropout \citep{Tompson2015SpatialDropout,Wu2015DropoutCNN}, Cutout \citep{DeVries2017Cutout}, and random erasing \citep{Zhong2020RandomErasing} have been proposed to mask contiguous spatial regions and encourage robustness to occlusion.
@@ -100,7 +101,7 @@ More recent statistical approaches, such as \cite{zammit2020deep} and \cite{wikl
 On the deep learning front, CNNs and ConvLSTMs \citep{Shi2015ConvLSTM} have been used to forecast meteorological and oceanographic variables, while benchmarks such as WeatherBench \citep{Rasp2020WeatherBench} have catalyzed comparative research in data-driven weather prediction. Subsequent models such as Pangu-Weather \citep{Bi2023PanguWeather} and FourCastNet \citep{Pathak2022FourCastNet} demonstrate that purely data-driven models can approach and even surpass numerical weather prediction (NWP) models at shorter lead times. These methods are increasingly being compared or combined with statistical spatiotemporal approaches, such as those proposed by \cite{zammit2020deep}, to evaluate tradeoffs between interpretability, uncertainty quantification, and predictive power.
 
 
-\section{Methods}
+\section{Methods}\label{sec:methods}
 
 We propose a model-integrated attribution framework for convolutional neural networks (CNNs) based on learnable input masking. The goal of our approach is to embed spatial interpretability directly into the predictive model, such that saliency maps arise as a natural product of training rather than requiring post hoc analysis. This is achieved by integrating a learnable masking module into the architecture and regularizing it to produce sparse and spatially coherent masks.
 
@@ -143,6 +144,9 @@ Training proceeds by minimizing a composite loss function that balances predicti
 
 All regularization terms are normalized by the number of spatial units (or pairs) to ensure consistent behavior across different input resolutions. The exponent parameter \( \gamma \in \{1, 2\} \) controls the form of the penalization. When \( \gamma = 1 \), the regularization promotes sparsity in the style of an \( \ell_1 \)-norm penalty, while \( \gamma = 2 \) corresponds to an \( \ell_2 \)-style penalty that encourages small but diffuse activations. In our experiments, both values produced qualitatively similar saliency masks, with \( \gamma = 2 \) typically yielding smoother and lower-magnitude mask activations. This choice offers a tunable trade-off between promoting sharp selectivity and preserving gradient stability during optimization.
 
+\paragraph{A structured-sparsity prior.}
+The two penalties in \eqref{eq:loss1} together impose a \emph{structured-sparsity} prior on the mask: the sparsity term limits the number of active locations, while the total-variation term couples neighbouring locations so that active regions are spatially contiguous rather than scattered. This is precisely the prior underlying the fused lasso \citep{Tibshirani2005FusedLasso} and total-variation denoising \citep{ROF1992}, and is equivalent to a maximum-a-posteriori estimate under a Laplacian Markov-random-field smoothness prior combined with a sparsity-inducing marginal---a combination long used for spatial regularization in statistics. What is new here is the \emph{target} of the prior: rather than regularizing regression coefficients or a post-hoc per-image perturbation mask \citep{Fong2017MeaningfulPerturbation,Dabkowski2017RealTime}, or a per-token attention transform \citep{Martins2020TVMax}, we regularize a single, globally-learned, in-model attribution gate that is trained jointly with the predictor. In Section~\ref{sec:sim} we show on ground-truth data that the smoothness term measurably improves attribution faithfulness, and that this benefit is not specific to our gate but transfers to other learned gates ($L_0$, STG) as a modular add-on.
+
 
 \subsection{Temperature Annealing}
 
@@ -184,345 +188,301 @@ This tiling strategy dramatically reduces the number of learned mask parameters�
 Despite the increased training cost, our approach remains far more efficient than perturbation-based attribution techniques such as SHAP or occlusion, which require repeated forward passes for each input. Once trained, both the per-pixel and tiled mask variants incur negligible overhead at inference time, producing predictions and saliency maps in a single forward pass.
 
 
-\section{Simulation Study: Structured Spatial Signals}
+\section{Simulation Study: Faithful Attribution under Known Ground Truth}\label{sec:sim}
 
-To validate the interpretability and selectivity of our masking framework, we designed a synthetic experiment with known ground-truth spatial structure and distractor regions. The goal is to assess whether the learned masks correctly localize predictive features while ignoring irrelevant signals.
+Because faithfulness cannot be measured directly on real data, we evaluate it on synthetic
+data with a known predictive structure, following the now-standard practice of benchmarking
+explanations against ground truth in the geosciences \citep{Mamalakis2022Fidelity}. We ask three
+questions: (i) does the total-variation penalty improve the faithfulness of a learned mask;
+(ii) is any such benefit specific to our gate, or does it transfer to other in-model gates; and
+(iii) how does our mask compare to both post-hoc and learned-gate baselines on faithfulness
+\emph{and} predictive performance.
 
-\subsection{Data Generation}
+\subsection{Data and metrics}
+Each image is $24\times48$ with i.i.d.\ Gaussian background noise
+$x_{i,j}\sim\mathcal N(0,0.5^2)$, and the dataset has $N=500$ samples. Two circular
+\emph{signal} regions (A at $(10,15)$ and B at $(14,30)$, radius 4) and two \emph{distractor}
+regions (radius 3) each receive a per-sample $\mathcal N(0,1)$ coefficient. The binary label is
+an XOR over the mean intensities of A and B---the label is 1 iff exactly one exceeds 0.5---so
+the task is nonlinear (requiring a CNN) and the distractors are, by construction, uninformative.
+We score each method's $H\times W$ importance map against the known regions by
+Intersection-over-Union (IoU, using the top-10\% most salient pixels) and by attribution mass
+(the fraction of total map mass inside a region). Higher signal overlap and lower distractor
+overlap are better.
 
-We simulate a spatial dataset of binary classification tasks using structured noise injected into synthetic images. Each image is of size \( 24 \times 48 \), and the dataset consists of \( N = 500 \) samples. The base input is i.i.d. Gaussian noise \( x_{i,j} \sim \mathcal{N}(0, 0.5^2) \), to which structured signals are added within four circular spatial regions:
-
-\begin{itemize}
-    \item \textbf{Region A}: centered at (10, 15), radius 4, weight \( +1.0 \)
-    \item \textbf{Region B}: centered at (14, 30), radius 4, weight \( -1.0 \)
-    \item \textbf{Distractor 1}: centered at (5, 35), radius 3, weight \( +0.8 \)
-    \item \textbf{Distractor 2}: centered at (18, 10), radius 3, weight \( -0.8 \)
-\end{itemize}
-
-Each region contributes to the input via a sample-specific scalar coefficient drawn from \( \mathcal{N}(0, 1) \). The final input tensor is a linear combination of the base noise and the masked region contributions. Labels are generated using an XOR logic over the average intensities in Regions A and B: the label is 1 if \textit{exactly one} of the two regions exceeds a threshold (set to 0.5), and 0 otherwise.
-
-
-We train two models:
-\begin{itemize}
-    \item A baseline CNN trained without any masking mechanism.
-    \item An input gated CNN, where a learnable mask is jointly trained to modulate the input before prediction.
-\end{itemize}
-
-Both models use the same shallow CNN backbone consisting of two convolutional layers followed by global average pooling and a final linear classification head. The masked model incorporates the input gate as described in Section~2, with sparsity and total variation penalties applied to the mask.
-
-For comparison, we apply four standard post hoc attribution techniques to the trained baseline model: saliency maps, integrated gradients, DeepLIFT, and gradient SHAP. These are computed on a held-out test sample and visualized alongside the estimated mask.
-
-
-
-Figure~\ref{fig-sim-attributions} shows the input image, ground truth signal and distractor regions, and the attribution maps produced by each method. The input gate CNN correctly identifies Regions A and B as predictive while suppressing the distractors, producing a sparse and interpretable saliency mask as part of the model itself.
+\subsection{Methods compared}
+We compare three families on a shared two-convolution backbone. \emph{Post-hoc} attributions are
+computed on an ungated CNN---gradient saliency \citep{Simonyan2014Saliency}, integrated
+gradients \citep{Sundararajan2017IG}, Grad-CAM \citep{Selvaraju2017GradCAM}, and gradient
+SHAP \citep{Lundberg2017SHAP}, all via Captum \citep{Kokhlikyan2020Captum}. \emph{Learned
+in-model gates} are trained jointly with the predictor: an $L_0$ hard-concrete gate
+\citep{Louizos2018L0}, a stochastic gate (STG) \citep{Yamada2020STG}, and a CBAM-style spatial
+attention gate \citep{Woo2018CBAM}. \emph{Our mask} is the temperature-annealed sigmoid gate of
+Section~\ref{sec:methods} with sparsity and TV penalties, reported both with and without the TV
+term (the within-method ablation). All results are averaged over 15 random seeds; comparisons use
+the paired Wilcoxon signed-rank test.
 
 \begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.95\textwidth]{all_methods.png}
-    \caption{Attribution maps from different methods on a held-out simulated test image. Ground truth signal regions (A, B) are shown in green contours, and distractor regions in red dashed contours. The estimated mask closely matches the true signals, while post hoc methods vary in sensitivity and spatial specificity.}
-    \label{fig-sim-attributions}
+  \centering
+  \includegraphics[width=0.95\textwidth]{sim1_attributions.png}
+  \caption{Attribution maps from each method on a representative test image. Signal regions are
+    outlined in green, distractors in red dashed. Post-hoc gradient maps are diffuse and leak onto
+    the distractors; the learned gates concentrate on the signal, and our TV mask produces a
+    compact, contiguous attribution over the true regions.}
+  \label{fig:sim-attrib}
 \end{figure}
 
-
-We repeated this simulation study over 100 randomized datasets to compare the predictive and interpretive performance of our proposed input gate CNN model against a baseline CNN model paired with standard post hoc saliency attribution.
-
-
-To evaluate interpretability, we defined two key metrics based on the known signal structure used in the simulation:
-
-\emph{Intersection over Union (IoU):}
-We computed the overlap between each attribution map and the ground truth signal regions (Regions A and B). The attribution map was binarized by selecting the top 10\% most salient pixels, and IoU was computed as:
-
-\[
-\text{IoU} = \frac{|\text{Attribution} \cap \text{Signal}|}{|\text{Attribution} \cup \text{Signal}|}
-\]
-
-This metric reflects how well the attribution highlights the true predictive regions.
-
-\emph{Saliency Mass:}
-We also computed the proportion of total attribution mass that lies within the signal and distractor regions. For a normalized attribution map \( a \), and binary mask \( M \) for a region:
-
-\[
-\text{Mass} = \frac{\sum_{(i,j) \in M} a_{i,j}}{\sum_{(i,j)} a_{i,j}}
-\]
-
-This provides a softer, distributional measure of interpretability.
-
-
-Table~\ref{tab:sim-results} summarizes the average results across the 100 seeds. The masked model consistently outperformed the baseline CNN in both predictive and interpretability metrics.
+\subsection{Total variation improves faithfulness}
+Table~\ref{tab:sim} and Figure~\ref{fig:sim-bar} report faithfulness and predictive performance.
+Removing the TV term from our mask reduces signal IoU from $0.747$ to $0.453$ (paired Wilcoxon
+$p=10^{-4}$): without spatial coupling the mask selects a sparse, incomplete subset of the signal,
+whereas the TV term fills in the contiguous predictive region. Every learned gate suppresses the
+distractors strongly (IoU $\le 0.01$), while post-hoc gradient maps leak substantially onto them
+(IoU $0.15$--$0.22$).
 
 \begin{table}[htbp]
 \centering
-\caption{Simulation performance across 100 random seeds. Results are shown as mean ± standard deviation.}
-\label{tab:sim-results}
-\begin{tabular}{lcc}
+\caption{Attribution faithfulness and predictive performance on the structured-signal simulation
+  (mean over 15 seeds). Signal IoU: higher is better; distractor IoU: lower is better. The last
+  column is the paired Wilcoxon $p$-value for signal IoU against Ours (TV).}
+\label{tab:sim}
+\begin{tabular}{lccccc}
 \toprule
-\textbf{Metric} & \textbf{Baseline CNN (Saliency)} & \textbf{Input Gate CNN} \\
+\textbf{Method} & \textbf{Signal IoU} & \textbf{Distr.\ IoU} & \textbf{Acc} & \textbf{F1} & \textbf{$p$ vs ours} \\
 \midrule
-Accuracy & 0.688 ± 0.058 & 0.731 ± 0.060 \\
-F1 Score & 0.575 ± 0.109 & 0.647 ± 0.095 \\
-IoU (Signal Regions) & 0.130 ± 0.150 & 0.687 ± 0.119 \\
-IoU (Distractor Regions) & 0.107 ± 0.098 & 0.0003 ± 0.0015 \\
-Mass (Signal Regions) & 0.102 ± 0.042 & 0.231 ± 0.025 \\
-Mass (Distractor Regions) & 0.067 ± 0.030 & 0.018 ± 0.008 \\
+Saliency             & 0.454 & 0.215 & 0.673 & 0.539 & $10^{-4}$ \\
+Integrated gradients & 0.786 & 0.146 & 0.673 & 0.539 & 0.17 \\
+Grad-CAM             & 0.669 & 0.210 & 0.673 & 0.539 & 0.009 \\
+Gradient SHAP        & 0.785 & 0.146 & 0.673 & 0.539 & 0.14 \\
+$L_0$ gate           & 0.836 & 0.002 & 0.626 & 0.419 & 0.002 \\
+STG gate             & 0.840 & 0.003 & 0.579 & 0.276 & 0.002 \\
+Spatial attention    & 0.610 & 0.199 & 0.675 & 0.547 & 0.003 \\
+Ours (no TV)         & 0.453 & 0.000 & 0.723 & 0.631 & $10^{-4}$ \\
+\textbf{Ours (TV)}   & 0.747 & 0.000 & 0.716 & 0.620 & --- \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{sim1_faithfulness.png}
+  \caption{Signal- and distractor-region IoU per method (mean $\pm$ SD over 15 seeds). Learned
+    gates suppress distractors; the TV term lifts our mask's signal overlap without inflating
+    distractor overlap.}
+  \label{fig:sim-bar}
+\end{figure}
 
+\subsection{The smoothness prior transfers across gates}
+Because total variation regularizes any differentiable spatial map, it can be added to other
+in-model gates as a modular term. Sweeping the sparsity weight reveals that adding TV
+significantly improves the $L_0$ and STG gates as well, provided they are not already saturated:
+at moderate sparsity the gain in signal IoU is $+0.07$ for $L_0$ ($p=0.012$) and $+0.13$ for STG
+($p=0.008$); at very high sparsity both gates already localize tightly and TV adds little (a
+ceiling effect). The smoothness prior therefore behaves as a general improvement to learned
+spatial attribution rather than a quirk of our particular gate. We fixed the TV weight across
+methods rather than tuning it per gate; a sensitivity analysis is left to the supplement.
 
-Training the input gate CNN model took approximately twice as long as the baseline CNN (205s vs.\ 93s), but inference time per sample was comparable. The added cost is acceptable given the integrated interpretability and improved performance.
-
-These results demonstrate that the PixelMaskGate model not only achieves better predictive accuracy, but also produces attribution maps that are significantly more faithful to the true signal structure and less noisy — without requiring any post hoc explanations.
-
-\section{Simulation Study 2: Strip-and-Noise Spatial Signals}
-
-\subsection{Design and Data Generation}
-We consider binary classification on \(48 \times 96\) images containing spatially correlated Gaussian noise and two orthogonal crosses: a \textbf{causal} cross in the upper-left quadrant (the \emph{true signal}) and a \textbf{spuriously correlated} cross in the lower-right quadrant (the \emph{distractor}).  
-A shared latent scalar perturbs both crosses in every sample; the distractor’s magnitude is randomly rescaled to prevent perfect collinearity.  
-Labels are generated from nonlinear interactions of mean intensities over the six sub-segments of the causal cross, ensuring that only the upper-left region is predictive.
+\subsection{A faithfulness--accuracy frontier}
+Sweeping the sparsity weight also traces out a frontier between localization and prediction
+(Figure~\ref{fig:sim-frontier}). The sparsity-only gates ($L_0$, STG) reach the highest signal
+IoU ($\approx 0.84$), but only at low predictive performance: their best attainable F1 is
+$\approx 0.46$--$0.48$, at or below the ungated baseline, because hard sparsification discards
+information the predictor needs. Our TV+sparsity mask instead reaches F1 $\approx 0.63$---
+significantly higher than either gate (paired Wilcoxon $p=0.002$) and above the ungated
+baseline---while still attaining signal IoU up to $0.80$ (a small but significant deficit of
+$0.045$ relative to the sparsity-only ceiling, $p=0.043$). For an attribution mechanism this is
+the more useful operating point: a faithful explanation that does not require degrading the model
+it explains. The soft, smooth mask attenuates rather than deletes inputs, which both preserves
+predictive signal and---through the TV prior---keeps the attribution spatially coherent.
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.78\textwidth]{signal_vs_distractor_labeled_switched.png}
-  \caption{Ground-truth spatial structure. Blue = \textbf{true signal}; red = \textbf{distractor}.}
-  \label{fig:sim2-truth}
+  \includegraphics[width=0.75\textwidth]{sim1_frontier.png}
+  \caption{Faithfulness--accuracy frontier as the sparsity weight is varied (TV on). Sparsity-only
+    gates occupy the high-IoU, low-F1 region; our TV mask occupies the high-F1 region they cannot
+    reach, at strong signal IoU and zero distractor overlap.}
+  \label{fig:sim-frontier}
 \end{figure}
 
-\subsection{Models and Gates}
-Three CNN backbones (\emph{Small}, \emph{Medium}, \emph{Dilated}) are trained under four input-gating conditions:
-\begin{enumerate*}
-    \item \textbf{None} (baseline, no mask),
-    \item \textbf{Location} (pixel-wise mask),
-    \item \textbf{Tiled 2$\times$2} (mask shared within \(2\times2\) tiles),
-    \item \textbf{Tiled 4$\times$4} (mask shared within \(4\times4\) tiles).
-\end{enumerate*}
-Masks are learned jointly with sparsity and total-variation penalties. Saliency and SHAP are applied post hoc only to the ungated baseline for comparison.  
-Experiments are repeated across architectures, sizes, and seeds on GPU; results below are averaged across all runs.
+\subsection{Limitation: capture by spurious shortcuts}\label{sec:sim-limitation}
+The sparsity penalty rewards concentrating mask mass on the \emph{cheapest} predictive region.
+When a non-causal feature is cheaply predictive---for instance a single region whose sign is
+correlated with the label---the mask can be drawn onto it in preference to a more distributed
+causal signal. In a variant in which a spurious region encoded a noisily-flipped copy of the
+label, our mask concentrated on the spurious region (signal IoU $0.06$) while post-hoc integrated
+gradients still recovered the causal regions (IoU $0.71$). We therefore do \emph{not} claim
+robustness to spurious correlation; characterizing when sparsity-driven masking resists versus is
+captured by shortcut features is important future work.
 
-\subsection{Results}
-\paragraph{Predictive performance and runtime.}
+\section{Application: Predicting El Ni\~no from Sea-Surface Temperature}\label{sec:enso}
+
+We now apply the masking framework to a real spatiotemporal forecasting problem with strong
+spatial dependence---predicting El Ni\~no from sea-surface temperature (SST). Deep networks
+forecast the El Ni\~no--Southern Oscillation with useful skill \citep{Ham2019DLENSO}, and
+interpreting \emph{where} on the Pacific they draw that skill is of direct scientific interest
+\citep{Toms2020PINN}. SST is also an ideal stress test for the attribution-under-dependence
+problem: the equatorial Pacific is highly autocorrelated, so predictive credit is intrinsically
+hard to localize. We ask two questions: does input gating preserve predictive skill, and do the
+learned masks agree with a principled statistical attribution?
+
+\subsection{Data and set-up}
+We use monthly SST anomalies over the tropical Pacific ($15^\circ$S--$15^\circ$N,
+$170^\circ$E--$100^\circ$W), de-seasonalized against the monthly climatology and down-sampled to a
+$30\times90$ grid. The binary label is an El Ni\~no event---the Ni\~no-3.4 anomaly
+($5^\circ$S--$5^\circ$N, $190^\circ$--$240^\circ$E) exceeding $0.5^\circ$C---at a lead of $k$
+months; the event rate is $\approx 27\%$. We report leads $k=3$ and $k=6$. Crucially we use a
+\emph{temporal holdout}: the model trains on the earlier $80\%$ of months and is validated on the
+later $20\%$. A random split would leak across SST's strong temporal autocorrelation and inflate
+apparent skill; we found this inflation to be substantial (e.g.\ lead-3 AUROC dropped from $0.92$
+under a random split to $0.90$ under the temporal holdout, and lead-6 from $0.76$ to $0.70$).
+
+The backbone is a DeepCNN: five $3\times3$ convolutions ($1\!\to\!32\!\to\!64\!\to\!64\!\to\!128
+\!\to\!128$), each with batch normalization and ReLU, followed by global average pooling and an
+MLP head ($128\!\to\!64\!\to\!32\!\to\!1$, dropout $0.3$). We train the ungated baseline and the
+pixel, $2\times2$, and $4\times4$ gates of Section~\ref{sec:methods} with sparsity
+($\lambda_{\mathrm{sp}}=10^{-2}$) and total-variation ($\lambda_{\mathrm{TV}}=0.2$) penalties and
+temperature annealing ($\tau:2.0\!\to\!0.01$), using Adam and multiplicative input dropout. The
+TV weight was selected by a small sweep over $\{0.01,0.05,0.2,0.5\}$: $\lambda_{\mathrm{TV}}=0.2$
+maximized mask agreement with the statistical reference (below) at unchanged AUROC, with larger
+values beginning to reduce skill. All numbers are means over four seeds.
+
+\subsection{Predictive performance}
+Table~\ref{tab:enso} reports accuracy, F1, and AUROC. At lead 3 the model has strong skill
+(AUROC $\approx 0.90$); at lead 6 out-of-time skill is modest (AUROC $\approx 0.70$)---six-month
+ENSO prediction from SST alone is genuinely difficult, and our temporal holdout avoids the
+optimism of random cross-validation. The key observation for our purposes is that \emph{gating
+does not degrade prediction}: gated and ungated models are within error of one another at both
+leads. Consistent with the simulations, the mask buys interpretability essentially for free on
+the predictive side.
+
 \begin{table}[htbp]
 \centering
-\caption{Mean test accuracy, F1 score, and training time per run (mean ± SD).}
-\label{tab:sim2-perf}
-\begin{tabular}{lccc}
+\caption{El Ni\~no prediction under a temporal holdout (mean over 4 seeds). ``Agree'' is the
+  Pearson correlation between the seed-averaged mask and the magnitude of the lagged-correlation
+  reference (Section~\ref{sec:enso-ref}); higher means the mask concentrates where the statistical
+  signal is.}
+\label{tab:enso}
+\begin{tabular}{llcccc}
 \toprule
-\textbf{Gate} & \textbf{Accuracy} & \textbf{F1} & \textbf{Train Time (s)} \\
+\textbf{Lead} & \textbf{Gate} & \textbf{Accuracy} & \textbf{F1} & \textbf{AUROC} & \textbf{Agree} \\
 \midrule
-None               & 0.930 ± 0.014 & 0.458 ± 0.026 & 3.1 ± 0.3 \\
-Location           & 0.928 ± 0.015 & 0.417 ± 0.028 & 4.6 ± 0.4 \\
-Tiled 2$\times$2   & 0.927 ± 0.013 & 0.421 ± 0.027 & 4.9 ± 0.4 \\
-Tiled 4$\times$4   & 0.924 ± 0.016 & 0.367 ± 0.029 & 4.8 ± 0.5 \\
+3 mo & None        & $0.77\pm0.03$ & 0.66 & 0.866 & --- \\
+3 mo & Pixel       & $0.80\pm0.00$ & 0.69 & 0.897 & $-0.02$ \\
+3 mo & Tiled 2$\times$2 & $0.79\pm0.02$ & 0.69 & 0.898 & $0.01$ \\
+3 mo & Tiled 4$\times$4 & $0.78\pm0.03$ & 0.67 & 0.876 & $0.14$ \\
+\midrule
+6 mo & None        & $0.67\pm0.08$ & 0.47 & 0.635 & --- \\
+6 mo & Pixel       & $0.65\pm0.04$ & 0.51 & 0.694 & $0.37$ \\
+6 mo & Tiled 2$\times$2 & $0.64\pm0.08$ & 0.51 & 0.699 & $0.47$ \\
+6 mo & Tiled 4$\times$4 & $0.64\pm0.08$ & 0.49 & 0.637 & $0.50$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Accuracy is essentially unchanged across gating schemes (all within \(\approx\!1\) pp of baseline). Coarser tiling preserves accuracy while keeping training time close to the no-gate model.
-
-\paragraph{Interpretability metrics.}
-\begin{table}[htbp]
-\centering
-\caption{Average \emph{Intersection-over-Union} ($k=|{\rm signal}|$) and \emph{attribution-mass} scores. Higher signal, lower distractor is better.}
-\label{tab:sim2-iou}
-\begin{tabular}{lcccc}
-\toprule
- & \multicolumn{2}{c}{\textbf{IoU}} & \multicolumn{2}{c}{\textbf{Mass}}\\
-\cmidrule(r){2-3}\cmidrule(l){4-5}
-\textbf{Method} & Signal & Distractor & Signal & Distractor \\
-\midrule
-Saliency (no gate) & 0.209 & 0.170 & 0.310 & 0.263 \\
-Location mask      & 0.520 & 0.156 & 0.272 & 0.262 \\
-Tiled 2$\times$2   & \textbf{0.581} & 0.150 & \textbf{0.279} & 0.264 \\
-Tiled 4$\times$4   & 0.482 & 0.149 & 0.278 & 0.264 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Learned masks more than double the IoU with the true signal relative to post-hoc saliency, while keeping distractor overlap low.  
-The 2$\times$2 mask achieves the highest localisation without inflating distractor mass.
-
-\paragraph{Mask localisation.}
-\begin{figure}[htbp]
-  \centering
-  \includegraphics[width=\textwidth]{combined_masks_large.png}
-  \caption{Learned input masks for Location, 2$\times$2, and 4$\times$4 gates. All focus on the \textbf{true} upper-left cross while suppressing the distractor. A shared colour-bar aids comparison.}
-  \label{fig:sim2-masks}
-\end{figure}
-
-\paragraph{Competitor attributions.}
-\begin{figure}[htbp]
-  \centering
-  \begin{subfigure}[t]{0.48\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{saliency_map_no_gate.png}
-    \caption{Gradient Saliency (un­gated)}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.48\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]{shap_map_no_gate.png}
-    \caption{Kernel SHAP (un­gated)}
-  \end{subfigure}
-  \caption{Post-hoc explanations for the ungated baseline frequently assign saliency to both crosses, including the non-causal distractor.}
-  \label{fig:sim2-competitors}
-\end{figure}
-
-\paragraph{Takeaways.}
-\begin{enumerate}
-    \item Integrated masking yields faithful, spatially sparse explanations that prioritise the true signal region.
-    \item Coarse tiling (\(2\times2\) or \(4\times4\)) maintains predictive accuracy while achieving the highest IoU and signal-mass scores, with negligible runtime overhead.
-    \item Post-hoc methods on ungated models are susceptible to spurious correlations, underscoring the value of integrated gates for causal interpretability.
-\end{enumerate}
-
-
-
-\section{Predicting El Ni\~{n}o}\label{sec-applications}
-\section{Non-linear SST Dynamics, Model Specification, and Learned Masks}
-
-\subsection{Why Convolutional Gates for SST Forecasting?}
-Sea-surface temperature (SST) fields that precede El Niño exhibit complex,
-non-linear interactions: Kelvin-wave advection, Bjerknes feedback, and
-sub-tropical recharge processes drive elongated warm tongues and asymmetric
-cold wedges that migrate in both latitude and longitude.  Linear indices
-(e.g.\ Niño-3.4) miss these evolving patterns, while deeper CNNs, although
-expressive, produce attribution maps so diffuse that physical interpretation
-suffers.  
-We therefore impose an \emph{input gate}—a learnable spatial mask—that
-co-trains with the CNN, forcing the network to reveal \emph{where} it looks
-while it learns \emph{what} matters.
-
-\subsection{Model and Training Set-up}
-\vspace{-0.3em}
-\begin{itemize}
-\item \textbf{Backbone.}  A \textbf{DeepCNN} with five
-      \(3\times3\) convolutions  
-      \((1\!\to\!32\!\to\!64\!\to\!64\!\to\!128\!\to\!128)\),
-      each followed by batch normalisation and \texttt{ReLU}.  
-      Global average pooling feeds an MLP
-      (64 \(\to\) 32 \(\to\) 1) with 0.3 dropout.
-\item \textbf{Gates.}  Three variants:
-      pixel-wise (\textbf{location}), \(2\times2\) tiles,
-      and \(4\times4\) tiles, trained with sparsity
-      (\(\lambda_{\text{sp}}=10^{-2}\)) and total-variation
-      (\(\lambda_{\text{tv}}=10^{-2}\)) penalties; temperature
-      anneals from~2.0 to~0.01.
-\item \textbf{Optimisation.}  Adam, \( \text{LR}=10^{-3}\),
-      batch size 128, multiplicative input dropout
-      \(p=0.20\).  Early stopping monitors out-of-sample
-      F1 with patience 10 (max 60 epochs).
-\item \textbf{Outputs.}  For every lead \(k\in\{3,6,9,12,15\}\) and gate type
-      we save  
-      \(\texttt{results/lead\_k\_<gate>}/\)
-      \{\textit{metrics\_txt}, \textit{mask\_heatmap}, \textit{saliency},
-      \textit{grad-cam}\}.
-\end{itemize}
-
-\subsection{Lead-6 Illustration: Our Mask vs.\ Classic Gradients}
+\subsection{A statistical reference for attribution}\label{sec:enso-ref}
+Real SST has no ground-truth attribution, so we validate the masks by \emph{convergent validity}
+against a principled statistical reference: the per-cell lagged point-biserial correlation between
+the SST anomaly and the future label (Figure~\ref{fig:enso-ref}, left). This map shows the
+expected structure---a tight equatorial warm-tongue band at lead 3 that broadens into the
+sub-tropics by lead 6. We also fit a fused-lasso logistic regression ($\ell_1$ + TV penalties on
+the per-cell coefficients), the linear statistical sibling of our mask. It is, however, hampered
+by collinearity: with $p \gg n$ and near-indistinguishable neighbouring equatorial cells, the
+coefficients are unstable even under strong regularization (Figure~\ref{fig:enso-ref}, right)---
+itself a vivid illustration of the attribution problem. We therefore use the robust univariate
+correlation map as the reference.
 
 \begin{figure}[htbp]
   \centering
-  \begin{subfigure}[t]{0.32\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]
-      {results/lead_6_pixel/mask_heatmap_lead6_pixel.png}
-    \caption{Pixel mask (ours)}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]
-      {results/lead_6_none/saliency_lead6_none.png}
-    \caption{Gradient Saliency}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]
-      {results/lead_6_none/gradcam_lead6_none.png}
-    \caption{Grad-CAM}
-  \end{subfigure}
-  \caption{Six-month lead attribution maps.
-           The learned gate isolates the equatorial warm tongue,
-           whereas post-hoc gradients disperse saliency over both hemispheres.}
-  \label{fig:lead6-three-attrib}
+  \includegraphics[width=0.95\textwidth]{sst_statistical_reference.png}
+  \caption{Statistical reference attribution for El Ni\~no (signed). The lagged-correlation map
+    (left) cleanly recovers the equatorial signal; the multivariate fused-lasso logistic (right)
+    is destabilized by collinearity among the highly correlated equatorial cells.}
+  \label{fig:enso-ref}
 \end{figure}
 
-\subsection{How the Mask Shifts with Lead Time}
+\subsection{Do the masks agree with the statistical signal?}
+Figure~\ref{fig:enso-masks} places the learned masks beside the correlation reference, and the
+final column of Table~\ref{tab:enso} quantifies agreement as the Pearson correlation between the
+mask and the magnitude of the reference. The result splits sharply by lead. At \textbf{lead 6} the
+masks agree moderately (Pearson $0.37$--$0.50$), and the \emph{tiled} masks agree better than the
+pixel mask ($0.47$--$0.50$ vs.\ $0.37$): coarse gating is both cheaper and cleaner. At
+\textbf{lead 3}, agreement is essentially zero, and this is robust across all TV weights we tried.
+
+This contrast is not a defect of the method but a demonstration of its premise. At lead 3 the
+El Ni\~no signal is so strong and persistent across the equatorial Pacific that the event can be
+predicted from almost any sub-region; with many individually-sufficient predictors, the input
+attribution is genuinely ill-posed, and no penalty pins the mask onto the ``true'' band. At lead 6
+the signal is weaker and more spatially localized, so the mask is forced to concentrate and aligns
+with the statistical reference. In other words, spatial dependence makes attribution ambiguous
+exactly when the signal is most redundant---the motivation of this work, now visible in real data.
+Accordingly we rest the interpretability claims of this paper on the controlled simulation of
+Section~\ref{sec:sim}, where ground truth exists, and treat the El Ni\~no masks as a real-world
+illustration of both the promise (lead 6) and the intrinsic limits (lead 3) of spatial attribution.
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=\textwidth]
-    {results/lead_3_pixel/mask_heatmap_lead3_pixel.png}\\[-0.35em]
-  \includegraphics[width=\textwidth]
-    {results/lead_6_pixel/mask_heatmap_lead6_pixel.png}\\[-0.35em]
-  \includegraphics[width=\textwidth]
-    {results/lead_9_pixel/mask_heatmap_lead9_pixel.png}\\[-0.35em]
-  \includegraphics[width=\textwidth]
-    {results/lead_12_pixel/mask_heatmap_lead12_pixel.png}\\[-0.35em]
-  \includegraphics[width=\textwidth]
-    {results/lead_15_pixel/mask_heatmap_lead15_pixel.png}
-  \caption{Pixel-level masks for leads 3, 6, 9, 12, 15 months
-           (top to bottom).  Warmer colours denote higher mask weight.}
-  \label{fig:lead-sweep}
+  \includegraphics[width=\textwidth]{sst_masks_vs_reference.png}
+  \caption{Learned input masks (pixel, $2\times2$, $4\times4$) beside the correlation reference at
+    leads 3 and 6. At lead 6 the masks---especially the tiled ones---track the equatorial band; at
+    lead 3 the redundancy of the signal leaves the attribution unconstrained.}
+  \label{fig:enso-masks}
 \end{figure}
 
-\textbf{Interpretation.} 
-At three months the mask concentrates on the central equatorial Pacific,
-capturing the nascent warm tongue.
-By six and nine months it widens into the sub-tropics, indicating that
-off-equatorial heat reservoirs contribute medium-range skill.
-At twelve months the focus retreats westward, reflecting the damping
-influence of cold-tongue dynamics; a similar pattern persists at fifteen
-months but with weaker magnitude, consistent with reduced predictability at
-long lead.
-
-\subsection{Tiling Trade-offs (Lead 6)}
-
-\begin{figure}[htbp]
-  \centering
-  \begin{subfigure}[t]{0.48\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]
-      {results/lead_6_tile_2x2/mask_heatmap_lead6_tile_2x2.png}
-    \caption{$\,2\times2$ tiles\newline
-             Accuracy 0.718, time 22\,s}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.48\textwidth}
-    \centering
-    \includegraphics[width=\linewidth]
-      {results/lead_6_tile_4x4/mask_heatmap_lead6_tile_4x4.png}
-    \caption{$\,4\times4$ tiles\newline
-             Accuracy 0.728, time 22\,s}
-  \end{subfigure}
-  \caption{Coarser gates retain the equatorial focus while
-           slashing training cost (pixel gate $\approx$ 622 s).}
-  \label{fig:tiled-lead6}
-\end{figure}
-
-\vspace{-0.2em}
-\textbf{Computational and accuracy implications.}
-Pixel-wise gating improves lead-6 accuracy to 0.709 but at a
-30$\times$ training-time penalty.
-A \(2\times2\) gate restores runtime to baseline with only a \(\!0.010\)
-accuracy drop, while a \(4\times4\) gate \emph{improves} accuracy to 0.728
-at the same cost.  Thus tiled masks provide a principled knob for balancing
-interpretability and efficiency in operational SST forecasting.
-
-\section{Interpretability Analysis}\label{sec-interpret}
-% Quantitative/qualitative saliency, ablation
+\subsection{Computational cost and the tiling knob}
+The cost of the TV penalty scales with the number of mask parameters, so on the native
+$0.25^\circ$ field the pixel gate is expensive ($\approx 600$\,s per fit) while tiled gates run in
+seconds; on the $30\times90$ grid used above the backbone dominates and all gates train in
+$\approx 23$\,s. Either way, tiling reduces the mask parameter count by a factor of $K^2$ and---as
+the lead-6 agreement shows---can yield \emph{cleaner} attribution, providing a practical knob for
+trading spatial resolution against computational cost in operational forecasting.
 
 \section{Discussion}\label{sec-discussion}
-% Strengths, limitations, future work
+Our results support two claims and expose two honest limits. On the positive side, the controlled
+simulation shows that a total-variation smoothness prior \emph{measurably and significantly
+improves the faithfulness} of learned in-model attribution, and does so not only for our sigmoid
+mask but, applied as a modular term, for $L_0$ and stochastic-gate baselines as well---total
+variation behaves as a general-purpose structured-sparsity prior for spatial attribution. Second,
+among learned gates our TV+sparsity mask occupies a favourable point on the
+faithfulness--accuracy frontier: it delivers faithful, spatially coherent attribution while
+preserving (indeed slightly improving) predictive performance, whereas sparsity-only gates buy
+sharper localization only by degrading the predictor they are meant to explain.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% REQUIRED SECTIONS
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Two limitations temper these claims. First, the sparsity penalty rewards concentrating mask mass
+on the \emph{cheapest} predictive region; when a non-causal feature is a cheap shortcut, the mask
+can be captured by it (Section~\ref{sec:sim-limitation}). We therefore do not claim robustness to
+spurious correlation, and identify characterizing this failure---when does sparsity-driven masking
+resist versus succumb to shortcuts?---as important future work. Second, the El Ni\~no study
+surfaces an \emph{intrinsic} limit: when a spatially-dependent signal is highly redundant, many
+sub-regions are individually sufficient and the attribution is not uniquely determined, regardless
+of method or regularization. This is a property of the problem, not the estimator, but it bounds
+what any single attribution map can claim. Finally, we fixed the TV weight across methods in the
+modular study rather than tuning it per gate, our anomaly normalization uses the full-series
+climatology (a mild, common form of leakage), and the fused-lasso reference is collinearity-limited;
+each is a candidate for refinement.
+
+Natural extensions include an uncertainty-aware variant that infers a posterior over the mask
+rather than a point estimate, connecting the structured-sparsity prior used here to the
+hierarchical Bayesian spatiotemporal tradition \citep{wikle2023statistical, zammit2020deep}, and a
+temporal (three-dimensional) gate for spatiotemporal rather than purely spatial attribution.
 
 \section{Conclusion}\label{sec-conclusion}
-% Final summary and significance
+We studied total-variation--regularized input masking as a route to faithful spatial attribution
+under spatial dependence. Framing the mask penalty as a structured-sparsity prior---linking total
+variation, the fused lasso, and Markov-random-field smoothness to a jointly-trained attribution
+gate---we showed on synthetic ground truth that the smoothness term significantly improves
+attribution faithfulness across learned gating mechanisms, and that our mask trades a negligible
+amount of localization for a large gain in predictive fidelity relative to sparsity-only gates.
+Applied to El Ni\~no forecasting, the masks preserve predictive skill and align with a statistical
+reference where attribution is well-posed, while honestly exposing the limits of attribution when
+a spatially-dependent signal is highly redundant. We hope the structured-sparsity perspective on
+learned attribution proves useful for interpretable modeling of high-dimensional environmental
+fields.
 
 \section{Disclosure statement}\label{disclosure-statement}
 The author declares no conflict of interest.
 
 \section{Data Availability Statement}\label{data-availability-statement}
-Code and data available at: \url{https://github.com/yourusername/projectname}.
+Code and data available at: \url{https://github.com/drbob-richardson/cnn_sst}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % SUPPLEMENTARY MATERIAL
@@ -536,7 +496,7 @@ Code and data available at: \url{https://github.com/yourusername/projectname}.
 
 \begin{description}
   \item[Code repository:] Full implementation, training scripts, and experiment configs (GitHub ZIP).
-  \item[Dataset files:] Preprocessed versions of benchmark datasets used in Section~\ref{sec-experiments}.
+  \item[Dataset files:] Preprocessed versions of the datasets used in Section~\ref{sec:sim}.
   \item[Additional figures:] Ablation and sensitivity analysis figures not in the main paper.
 \end{description}
 

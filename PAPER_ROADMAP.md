@@ -46,6 +46,9 @@ fused lasso is the tractable, conceptually-matched sibling of the TV mask).
 
 ## Phase 3 — Simulations: our method vs. existing methods  *(primary evidence)*
 - [x] ⏸ **Baseline set APPROVED** (no fused-lasso in sims): post-hoc = saliency/IG/Grad-CAM/gradient-SHAP; learned = L0/STG + CBAM-style spatial attention; ablation = our mask ±TV.
+- [x] ✅ **Spurious-correlation regime** (`masking/sim_spurious.py`, `results/sim_spurious.csv`, figs in `write_up/sim_spurious_*.png`). **NEGATIVE / IMPORTANT FINDING (2026-06-04):** our TV+sparsity mask is **captured by the cheap spurious shortcut** (IoU_causal **0.057**, IoU_spurious 0.409) while post-hoc **IG/SHAP correctly localize the causal region** (0.71). **This is the OPPOSITE of the paper's current §4 claim** ("integrated gates better for causal interpretability"). Mechanism: sparsity rewards concentrating on the *cheapest* predictive region = the spurious blob; the causal XOR (two blobs) is more expensive. ⇒ **The "robust to spurious correlation / causal interpretability" claim does NOT hold as tested and must be re-examined or dropped.** (Design-dependent on spurious strength — see fork below.)
+- [x] 🚦 **FORK — RESOLVED → (b) (2026-06-04):** **drop the spurious-correlation / "causal interpretability" claim.** The paper does NOT claim robustness to spurious correlation. Keep `sim_spurious.py` + figures as documentation; mention the shortcut-capture as a **one-paragraph limitation** in §Discussion. Sim-1 (modular TV + frontier) carries the simulation evidence. *User may revisit option (a) — the flip_p characterization — later while thinking about WHY the capture happens.*
+- **§4 ACTION:** the current paper's §4 (Strip-and-Noise / spurious-correlation study, Tables 2–3, Figs 2–4) asserts the now-refuted claim → **rewrite or remove §4** when we get to writing; do not carry its "integrated gates resist spurious correlation" takeaway.
 - [ ] ⏸ Approve adding a **linear-signal simulation regime** — *deferred*; first run uses the existing nonlinear XOR regime.
 - [x] ✅ Implemented in `masking/sim_attribution_benchmark.py` (IoU + saliency-mass vs ground truth; **insertion/deletion deferred** — ground-truth IoU/mass is the cleaner primary metric).
 - [x] ✅ Ran seeded study (15 seeds × 60 epochs) → `results/sim_attribution_benchmark.csv`.
@@ -65,18 +68,25 @@ fused lasso is the tractable, conceptually-matched sibling of the TV mask).
 
 ## Phase 4 — ENSO application: rehab + statistical reference
 - [ ] ⏸ Approve the **evaluation protocol**: data choice (`sst.mon.mean.nc` vs `sst_data.nc`), class-imbalance handling (weighting/threshold/report AUPRC+F1), multiple seeds + error bars.
-- [ ] ✅ Re-run El Niño masking across leads {3,6,9,12,15} × gates with seeds (pixel gate ≈ overnight; tiled/none fast).
-- [ ] ✅ Implement + run the **fused-lasso logistic** reference and the **lagged-correlation** map on the SST field (cheap, local).
-- [ ] ✅ Compute agreement metrics: mask vs. fused-lasso vs. correlation, on a common grid.
+- [x] ✅ **Statistical reference** (`masking/sst_statistical_reference.py` → `write_up/sst_statistical_reference.png`, `results/sst_statistical_reference.npz`). **Lagged-correlation map is clean & physical** (equatorial band at lead 3 broadening off-equator by lead 6). **Fused-lasso logistic is limited by collinearity** (p≫n; even with strong L1+TV it can't cleanly localize — itself an illustration of the attribution-under-dependence problem). ⇒ **use correlation as the primary reference; footnote the fused-lasso.**
+- [x] ✅ **Masking driver RECONSTRUCTED** (`masking/sst_masking.py`, replaces the lost script): DeepCNN (5-conv) + pixel/2×2/4×4 gates + TV/sparsity + τ-anneal, on the 30×90 field. **Running** leads {3,6} × 4 seeds → `results/sst_masking.csv`, `results/sst_masking_maps.npz`, `write_up/sst_masks_vs_reference.png` (acc/F1/AUROC + mask↔correlation agreement). *Note: downsampled reconstruction; not byte-identical to the lost original.*
+- [~] ✅ Agreement metric = Pearson(mask, |correlation|) on the common 30×90 grid (in the run above).
+- [x] ✅ **Fixed methodology** (temporal holdout + real per-seed variation). Honest numbers: **lead 3 AUROC ~0.87 / F1 ~0.69** (good), **lead 6 AUROC ~0.65** (marginal — out-of-time 6-mo ENSO is hard).
+- [x] ✅ **TV-weight sweep** (`masking/sst_tv_sweep.py`, `results/sst_tv_sweep.csv`, `write_up/sst_tv_sweep.png`). TV smooths masks as intended; **λ_tv=0.2 selected** (best mask↔correlation agreement at flat AUROC; λ=0.5 starts hurting AUROC). Final masks re-run at 0.2.
+- [x] 🚦 **ENSO interpretability — honest verdict:** masks agree with the correlation reference **moderately at lead 6 (~0.5)** but **~0 at lead 3, robustly across all λ_tv.** *Why:* at lead 3 the ENSO signal is so strong/persistent across the equatorial Pacific that attribution is genuinely ill-posed — the mask need not (and does not) pin to the "true" band. **This is on-thesis** (it *demonstrates* attribution ambiguity under spatial dependence). **Decision: interpretability claim rests on the SIMULATIONS; ENSO = predictive result + statistical-reference comparison + honest discussion of the lead-3 ambiguity.** Do NOT claim "masks cleanly recover ENSO physics."
+- **§ENSO ACTION:** rewrite §5–6 to this honest framing (predictive AUROC w/ error bars + temporal holdout; correlation-reference agreement at lead 6; lead-3 ambiguity as illustration). Drop old prediction-improvement claims + 0.25° figures (or cite 0.25° only for the tiling-runtime point). Tiling-efficiency: cite the **0.25°** timings (pixel ~600s vs tiled ~3s); at 30×90 all gates ~23s.
 - [ ] ⏸ **Expert physics check:** do the masks recover credible ENSO precursors, and are agreements/divergences with the statistical reference defensible? *(I can't supply this judgment.)*
 - [ ] 🚦 **GATE:** Are the ENSO masks scientifically credible and is predictive performance honestly reportable (mask "at no predictive cost" is fine; degenerate classifiers are not)? **Your call to proceed.**
 - [ ] ⏸ Decide: add a **robustness-to-missing-inputs / occlusion** experiment, or **drop that claim** from the abstract (currently unsupported).
 
 ## Phase 5 — Writing  *(main.tex in write_up/)*
-- [ ] ✅ Draft reframed **Abstract + Intro** (structured-sparsity / spatial-dependence angle).
-- [ ] ⏸ **Methods**: add TV ↔ fused-lasso ↔ MRF equivalence + global-mask clarification (you check the math/derivations).
-- [ ] ✅ Draft the **empty sections**: §5 Predicting El Niño, §7 Interpretability Analysis, §8 Discussion, §9 Conclusion (from actual results).
-- [ ] ✅ Rebuild tables/figures from new results; fix the metrics-vs-text mismatches.
+- [x] ✅ Reframed **Abstract + Intro** drafted (structured-sparsity / spatial-dependence angle; positions vs TVmax/L0/STG/Fong-Vedaldi). `write_up/main.tex` compiles → `main.pdf`.
+- [x] ⏸ **Methods**: added the structured-sparsity paragraph (TV ↔ fused-lasso ↔ MRF). *You should sanity-check the MAP/MRF claim wording.*
+- [x] ✅ **New simulation section** written from real results (Table + 3 figures `sim1_attributions/faithfulness/frontier.png`) replacing old §3; **old §4 (spurious) removed**. Honest limitation paragraph included.
+- [x] ✅ **§ENSO rewritten** (honest framing: temporal-holdout AUROC + error bars; correlation reference; lead-6 agreement / lead-3 ambiguity; tiling cost). Old §5–6 overclaims + 0.25° result-PNG figures removed; new figures `sst_statistical_reference.png`, `sst_masks_vs_reference.png` + Table.
+- [x] ✅ **§Discussion + §Conclusion written** (2 contributions + 2 honest limitations: spurious capture, attribution ambiguity under redundancy). Empty §Interpretability stub removed. Whole paper compiles → `main.pdf`.
+- [ ] ⏸ Remaining writing polish: **claims audit**, **reformat to Environmetrics (Wiley) template/style**, verify new bib details, polish figures, tidy supplementary/title-page template artifacts.
+- [x] ✅ Added must-cite refs (TVmax, STG, L2X, INVASE, Grad-CAM, fused lasso, Mamalakis, Toms&Barnes, Ham, Captum, Dabkowski). *Verify a few bib details (esp. TVmax venue/authors).*
 - [ ] ⏸ **Claims audit**: every claim traces to a result; cut overclaims.
 - [ ] ✅ Reformat to **Environmetrics (Wiley)** template + bibliography style; add the must-cite refs.
 

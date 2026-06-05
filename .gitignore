@@ -20,6 +20,16 @@ env/
 # ---- Run logs / scratch ----
 *.log
 
+# ---- LaTeX build artifacts (keep main.pdf) ----
+*.aux
+*.bbl
+*.blg
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
 # ---- OS / editor ----
 .DS_Store
 *.swp
