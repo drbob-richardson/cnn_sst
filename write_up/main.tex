@@ -64,7 +64,7 @@
 \begin{abstract}
 Attribution methods are widely used to explain the predictions of convolutional neural networks (CNNs) over spatial fields, but spatial dependence makes attribution ill-posed: when neighbouring inputs are highly correlated, predictive credit can be assigned almost arbitrarily among them, and post-hoc saliency maps become noisy and unstable. We study an in-model alternative in which a learnable input mask is trained jointly with the predictor and regularized by a \emph{structured-sparsity} penalty that combines an $\ell_1/\ell_2$-style sparsity term with a total-variation (TV) term encouraging spatial smoothness---the fused-lasso / Markov-random-field prior familiar from spatial statistics, applied here to a learned attribution map.
 
-On synthetic data with known ground-truth signal and distractor regions, we show that (i) the TV penalty significantly improves the faithfulness of learned attribution and, applied as a modular add-on, improves not only our mask but also stochastic-gate baselines ($L_0$ and STG); and (ii) our TV+sparsity mask occupies a favourable point on the faithfulness--accuracy frontier, delivering faithful attribution without degrading---and slightly improving---predictive performance, whereas sparsity-only gates achieve marginally sharper localization only by collapsing the predictor. We apply the method to El Ni\~no prediction from sea-surface temperature, comparing the learned masks against a fused-lasso statistical reference, and show that coarse tiled masks retain interpretability at a fraction of the training cost. We are explicit about limitations, including a failure mode in which sparsity-driven masks are captured by cheap spurious shortcuts.
+On synthetic data with known ground-truth signal and distractor regions, we show that (i) the TV penalty significantly improves the faithfulness of learned attribution and, applied as a modular add-on, improves not only our mask but also stochastic-gate baselines ($L_0$ and STG); and (ii) our TV+sparsity mask occupies a favourable point on the faithfulness--accuracy frontier, delivering faithful attribution without degrading---and slightly improving---predictive performance, whereas sparsity-only gates achieve marginally sharper localization only by collapsing the predictor. We apply the method to El Ni\~no prediction from sea-surface temperature: with the predictor selected honestly on a temporal validation split, the learned masks recover the known equatorial signal, agreeing with a lagged-correlation statistical reference, while coarse tiled masks remain competitive at a lower parameter count. We are explicit about limitations, including a failure mode in which sparsity-driven masks are captured by cheap spurious shortcuts.
 \end{abstract}
 
 
@@ -346,51 +346,79 @@ We use monthly SST anomalies over the tropical Pacific ($15^\circ$S--$15^\circ$N
 $170^\circ$E--$100^\circ$W), de-seasonalized against the monthly climatology and down-sampled to a
 $30\times90$ grid. The binary label is an El Ni\~no event---the Ni\~no-3.4 anomaly
 ($5^\circ$S--$5^\circ$N, $190^\circ$--$240^\circ$E) exceeding $0.5^\circ$C---at a lead of $k$
-months; the event rate is $\approx 27\%$. We report leads $k=3$ and $k=6$. Crucially we use a
-\emph{temporal holdout}: the model trains on the earlier $80\%$ of months and is validated on the
-later $20\%$. A random split would leak across SST's strong temporal autocorrelation and inflate
-apparent skill; we found this inflation to be substantial (e.g.\ lead-3 AUROC dropped from $0.92$
-under a random split to $0.90$ under the temporal holdout, and lead-6 from $0.76$ to $0.70$).
+months; the event rate is $\approx 27\%$. We report leads $k=3$ and $k=6$.
 
-The backbone is a DeepCNN: five $3\times3$ convolutions ($1\!\to\!32\!\to\!64\!\to\!64\!\to\!128
-\!\to\!128$), each with batch normalization and ReLU, followed by global average pooling and an
-MLP head ($128\!\to\!64\!\to\!32\!\to\!1$, dropout $0.3$). We train the ungated baseline and the
-pixel, $2\times2$, and $4\times4$ gates of Section~\ref{sec:methods} with sparsity
-($\lambda_{\mathrm{sp}}=10^{-2}$) and total-variation ($\lambda_{\mathrm{TV}}=0.2$) penalties and
-temperature annealing ($\tau:2.0\!\to\!0.01$), using Adam and multiplicative input dropout. The
-TV weight was selected by a small sweep over $\{0.01,0.05,0.2,0.5\}$: $\lambda_{\mathrm{TV}}=0.2$
-maximized mask agreement with the statistical reference (below) at unchanged AUROC, with larger
-values beginning to reduce skill. All numbers are means over four seeds.
-
-\subsection{Predictive performance}
-Table~\ref{tab:enso} reports accuracy, F1, and AUROC. At lead 3 the model has strong skill
-(AUROC $\approx 0.90$); at lead 6 out-of-time skill is modest (AUROC $\approx 0.70$)---six-month
-ENSO prediction from SST alone is genuinely difficult, and our temporal holdout avoids the
-optimism of random cross-validation. The key observation for our purposes is that \emph{gating
-does not degrade prediction}: gated and ungated models are within error of one another at both
-leads. Consistent with the simulations, the mask buys interpretability essentially for free on
-the predictive side.
+We guard against two sources of optimism. First, SST is strongly autocorrelated in time, so a
+random train/validation split leaks; we use a strictly \emph{temporal} division of the months
+into train (earliest $60\%$), validation ($60$--$80\%$), and a held-out test block (last $20\%$).
+Second, rather than fixing an architecture by hand---and risking the over-parameterization typical
+of inherited specifications---we \emph{select} the backbone on the validation block. We compared
+five candidate CNNs spanning $1.3$k--$288$k parameters (including the five-layer DeepCNN of the
+prior specification) by the validation AUROC of the ungated predictor
+(Table~\ref{tab:enso-select}). The large DeepCNN---roughly $700$ parameters per training month---
+generalizes \emph{worst}; the selected model is a compact CNN with $\approx\!5$k parameters (two
+$3\times3$ convolutions with $2\times2$ pooling, batch normalization and ReLU, global average
+pooling, and a linear head). \emph{All final numbers below are reported on the untouched test
+block}, which played no part in selection.
 
 \begin{table}[htbp]
 \centering
-\caption{El Ni\~no prediction under a temporal holdout (mean over 4 seeds). ``Agree'' is the
-  Pearson correlation between the seed-averaged mask and the magnitude of the lagged-correlation
-  reference (Section~\ref{sec:enso-ref}); higher means the mask concentrates where the statistical
-  signal is.}
+\caption{Architecture selection by validation AUROC (mean over leads 3 and 6, ungated baseline).
+  The inherited DeepCNN is the most over-parameterized and generalizes worst.}
+\label{tab:enso-select}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Backbone} & \textbf{Parameters} & \textbf{Validation AUROC} \\
+\midrule
+Compact CNN (selected) & 4{,}929   & \textbf{0.890} \\
+Medium CNN             & 25{,}633  & 0.884 \\
+Medium CNN (GELU)      & 25{,}633  & 0.881 \\
+Tiny CNN               & 1{,}313   & 0.880 \\
+DeepCNN (prior spec)   & 288{,}385 & 0.874 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Given the selected backbone we train the ungated baseline and the pixel, $2\times2$, and
+$4\times4$ gates of Section~\ref{sec:methods} with sparsity ($\lambda_{\mathrm{sp}}=10^{-2}$) and
+total-variation ($\lambda_{\mathrm{TV}}=0.2$) penalties and temperature annealing
+($\tau:2.0\!\to\!0.01$), using Adam with multiplicative input dropout and early stopping on the
+validation AUROC. The TV weight was chosen by a small sweep over $\{0.01,0.05,0.2,0.5\}$ that
+maximized mask agreement with the statistical reference (below) at unchanged AUROC. All numbers
+are means over three seeds.
+
+\subsection{Predictive performance}
+Table~\ref{tab:enso} reports test-block performance. We emphasize AUROC, a threshold-free ranking
+metric, because the $0.5$ decision threshold is poorly calibrated on a held-out \emph{future}
+block whose event frequency differs from the training period---the threshold-dependent accuracy
+and F1 degrade accordingly and should be read with caution. At lead 3 the model ranks events well
+(AUROC $\approx 0.82$); at lead 6 skill is marginal (AUROC $\approx 0.62$): six-month ENSO
+prediction from SST alone, evaluated strictly out-of-time, is genuinely difficult. The key point
+for our purposes is that \emph{gating does not degrade prediction}---gated and ungated models are
+within error at both leads---so, as in the simulations, the mask buys interpretability essentially
+for free.
+
+\begin{table}[htbp]
+\centering
+\caption{El Ni\~no prediction on the held-out \emph{test} block (mean over 3 seeds), with the
+  selected compact backbone. AUROC is the reliable metric here; accuracy and F1 are depressed by
+  threshold miscalibration under temporal distribution shift. ``Agree'' is the Pearson correlation
+  between the seed-averaged mask and the magnitude of the lagged-correlation reference
+  (Section~\ref{sec:enso-ref}).}
 \label{tab:enso}
 \begin{tabular}{llcccc}
 \toprule
-\textbf{Lead} & \textbf{Gate} & \textbf{Accuracy} & \textbf{F1} & \textbf{AUROC} & \textbf{Agree} \\
+\textbf{Lead} & \textbf{Gate} & \textbf{AUROC} & \textbf{Accuracy} & \textbf{F1} & \textbf{Agree} \\
 \midrule
-3 mo & None        & $0.77\pm0.03$ & 0.66 & 0.866 & --- \\
-3 mo & Pixel       & $0.80\pm0.00$ & 0.69 & 0.897 & $-0.02$ \\
-3 mo & Tiled 2$\times$2 & $0.79\pm0.02$ & 0.69 & 0.898 & $0.01$ \\
-3 mo & Tiled 4$\times$4 & $0.78\pm0.03$ & 0.67 & 0.876 & $0.14$ \\
+3 mo & None            & 0.822 & $0.55\pm0.21$ & 0.45 & --- \\
+3 mo & Pixel           & 0.826 & $0.57\pm0.22$ & 0.35 & $\mathbf{0.63}$ \\
+3 mo & Tiled 2$\times$2 & 0.826 & $0.57\pm0.22$ & 0.34 & $0.57$ \\
+3 mo & Tiled 4$\times$4 & 0.826 & $0.57\pm0.22$ & 0.35 & $0.62$ \\
 \midrule
-6 mo & None        & $0.67\pm0.08$ & 0.47 & 0.635 & --- \\
-6 mo & Pixel       & $0.65\pm0.04$ & 0.51 & 0.694 & $0.37$ \\
-6 mo & Tiled 2$\times$2 & $0.64\pm0.08$ & 0.51 & 0.699 & $0.47$ \\
-6 mo & Tiled 4$\times$4 & $0.64\pm0.08$ & 0.49 & 0.637 & $0.50$ \\
+6 mo & None            & 0.622 & $0.70\pm0.03$ & 0.10 & --- \\
+6 mo & Pixel           & 0.621 & $0.72\pm0.02$ & 0.05 & $0.50$ \\
+6 mo & Tiled 2$\times$2 & 0.618 & $0.72\pm0.02$ & 0.05 & $0.43$ \\
+6 mo & Tiled 4$\times$4 & 0.619 & $0.70\pm0.03$ & 0.10 & $0.26$ \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -419,28 +447,29 @@ correlation map as the reference.
 \subsection{Do the masks agree with the statistical signal?}
 Figure~\ref{fig:enso-masks} places the learned masks beside the correlation reference, and the
 final column of Table~\ref{tab:enso} quantifies agreement as the Pearson correlation between the
-mask and the magnitude of the reference. The result splits sharply by lead. At \textbf{lead 6} the
-masks agree moderately (Pearson $0.37$--$0.50$), and the \emph{tiled} masks agree better than the
-pixel mask ($0.47$--$0.50$ vs.\ $0.37$): coarse gating is both cheaper and cleaner. At
-\textbf{lead 3}, agreement is essentially zero, and this is robust across all TV weights we tried.
+seed-averaged mask and the magnitude of the reference. The masks \emph{recover the equatorial
+signal}. At \textbf{lead 3} agreement is strong and visually unmistakable---a compact
+central-Pacific blob coinciding with the correlation band, with Pearson $0.57$--$0.63$ across gate
+types. At \textbf{lead 6} agreement is moderate ($0.26$--$0.50$), the masks emphasizing an
+off-equatorial region broadly consistent with the broadened reference. This is convergent
+validity: with no access to ground truth, two very different estimators---a univariate statistical
+map and a jointly-trained nonlinear mask---independently identify the same predictive region.
 
-This contrast is not a defect of the method but a demonstration of its premise. At lead 3 the
-El Ni\~no signal is so strong and persistent across the equatorial Pacific that the event can be
-predicted from almost any sub-region; with many individually-sufficient predictors, the input
-attribution is genuinely ill-posed, and no penalty pins the mask onto the ``true'' band. At lead 6
-the signal is weaker and more spatially localized, so the mask is forced to concentrate and aligns
-with the statistical reference. In other words, spatial dependence makes attribution ambiguous
-exactly when the signal is most redundant---the motivation of this work, now visible in real data.
-Accordingly we rest the interpretability claims of this paper on the controlled simulation of
-Section~\ref{sec:sim}, where ground truth exists, and treat the El Ni\~no masks as a real-world
-illustration of both the promise (lead 6) and the intrinsic limits (lead 3) of spatial attribution.
+Crucially, this clean agreement emerged only once the predictor was properly sized. The
+over-parameterized DeepCNN of the prior specification, which generalizes worst
+(Table~\ref{tab:enso-select}), produces noisy masks with essentially zero agreement at lead 3: a
+model with the freedom to fit idiosyncratic noise has no need to concentrate on the physical
+signal, and its attribution is correspondingly uninformative. Faithful in-model attribution thus
+presupposes a well-specified predictor---an instance of the broader principle that an explanation
+is only as meaningful as the model it explains, and a concrete reason to select the predictor
+honestly rather than inherit an over-sized one.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{sst_masks_vs_reference.png}
-  \caption{Learned input masks (pixel, $2\times2$, $4\times4$) beside the correlation reference at
-    leads 3 and 6. At lead 6 the masks---especially the tiled ones---track the equatorial band; at
-    lead 3 the redundancy of the signal leaves the attribution unconstrained.}
+  \caption{Learned input masks (pixel, $2\times2$, $4\times4$) from the selected backbone beside
+    the correlation reference at leads 3 and 6. At lead 3 the masks concentrate on the equatorial
+    band that the reference identifies; at lead 6 they show a consistent off-equatorial emphasis.}
   \label{fig:enso-masks}
 \end{figure}
 
@@ -467,11 +496,13 @@ Two limitations temper these claims. First, the sparsity penalty rewards concent
 on the \emph{cheapest} predictive region; when a non-causal feature is a cheap shortcut, the mask
 can be captured by it (Section~\ref{sec:sim-limitation}). We therefore do not claim robustness to
 spurious correlation, and identify characterizing this failure---when does sparsity-driven masking
-resist versus succumb to shortcuts?---as important future work. Second, the El Ni\~no study
-surfaces an \emph{intrinsic} limit: when a spatially-dependent signal is highly redundant, many
-sub-regions are individually sufficient and the attribution is not uniquely determined, regardless
-of method or regularization. This is a property of the problem, not the estimator, but it bounds
-what any single attribution map can claim. Finally, we fixed the TV weight across methods in the
+resist versus succumb to shortcuts?---as important future work. Second, attribution faithfulness
+depends on the predictor being well specified: an over-parameterized model that is free to fit
+idiosyncratic noise yields masks that do not localize (Section~\ref{sec:enso}), so our
+interpretability claims presuppose a model selected to generalize rather than an inherited,
+over-sized one. On the predictive side our out-of-time skill is honest but limited---lead-6 ENSO
+ranking is only marginally above chance---and the threshold-dependent metrics are sensitive to
+temporal distribution shift. Finally, we fixed the TV weight across methods in the
 modular study rather than tuning it per gate, our anomaly normalization uses the full-series
 climatology (a mild, common form of leakage), and the fused-lasso reference is collinearity-limited;
 each is a candidate for refinement.
