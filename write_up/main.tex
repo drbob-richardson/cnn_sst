@@ -274,13 +274,29 @@ Ours (no TV)         & 0.453 & 0.000 & 0.723 & 0.631 & $10^{-4}$ \\
 
 \subsection{The smoothness prior transfers across gates}
 Because total variation regularizes any differentiable spatial map, it can be added to other
-in-model gates as a modular term. Sweeping the sparsity weight reveals that adding TV
-significantly improves the $L_0$ and STG gates as well, provided they are not already saturated:
-at moderate sparsity the gain in signal IoU is $+0.07$ for $L_0$ ($p=0.012$) and $+0.13$ for STG
-($p=0.008$); at very high sparsity both gates already localize tightly and TV adds little (a
-ceiling effect). The smoothness prior therefore behaves as a general improvement to learned
-spatial attribution rather than a quirk of our particular gate. We fixed the TV weight across
-methods rather than tuning it per gate; a sensitivity analysis is left to the supplement.
+in-model gates as a modular term. We swept the sparsity weight for the $L_0$, STG, and our own
+gate, each with TV off and on, and measured the change in signal IoU
+(Figure~\ref{fig:sim-modular}). Adding TV significantly improves the $L_0$ and STG gates, provided
+they are not already saturated: at moderate sparsity the gain in signal IoU is $+0.07$ for $L_0$
+(paired Wilcoxon $p=0.012$) and $+0.13$ for STG ($p=0.008$); at very high sparsity both gates
+already localize tightly and TV adds little. Strikingly, all three gates collapse onto a common
+curve: the IoU gain from TV is governed by how well the base gate localizes \emph{without} it---
+largest when the base gate is poor, shrinking to zero at the ceiling---and not by which gating
+mechanism is used. The smoothness prior therefore behaves as a general, modular improvement to
+learned spatial attribution rather than a quirk of our particular gate. We fixed the TV weight
+across methods rather than tuning it per gate; a per-method sensitivity analysis is left to the
+supplement.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.72\textwidth]{sim1_modular_tv.png}
+  \caption{The total-variation penalty as a modular faithfulness prior. Each point is one
+    sparsity setting of one gate; the vertical axis is the change in signal IoU from adding TV.
+    Every point lies at or above zero (TV never hurts faithfulness), and the three gates ($L_0$,
+    STG, and ours) fall on a common curve: the gain is largest where the base gate localizes worst
+    and vanishes once it already saturates the IoU ceiling.}
+  \label{fig:sim-modular}
+\end{figure}
 
 \subsection{A faithfulness--accuracy frontier}
 Sweeping the sparsity weight also traces out a frontier between localization and prediction
