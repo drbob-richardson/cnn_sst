@@ -33,3 +33,5 @@ env/
 # ---- OS / editor ----
 .DS_Store
 *.swp
+results/wb_z500.npz
+results/*.npz
