@@ -64,6 +64,12 @@ fused lasso is the tractable, conceptually-matched sibling of the TV mask).
   - Caveats for limitations: single untuned λ_tv=5e-2 on the +TV side; modest absolute effects; one synthetic regime.
 - **Does "ours" have an advantage? YES — significant (best-config, paired, 10 seeds):** ours F1 **0.633** vs L0 0.483 / STG 0.457 (**p=0.002**), and ours F1 > ungated baseline 0.539 (soft mask = helpful denoising; L0/STG can't exceed baseline). Cost: ours peak IoU 0.797 vs 0.845 (**p=0.043**, real deficit, must report). ⇒ **ours = faithful attribution at NO predictive cost; L0/STG = marginally better localization but collapse the predictor below baseline.** Keep ours.
 - **Two contributions to write:** (1) **TV as a modular faithfulness prior** (helps L0/STG/ours, significant off the ceiling); (2) **our TV+sparsity sigmoid gate is the frontier sweet spot** — faithful attribution while keeping the predictor intact. (+ ENSO application + tiling efficiency.)
+
+### SST CNN architecture investigation (2026-06-05)
+- **Finding:** the naive/inherited CNN lost to a *basic* L2 logistic (0.92/0.79) because of **global average pooling discarding location** (dominant) + **batch 128 = 3 updates/epoch** (moderate) + **input dropout** (minor) + over-sizing. NOT a fundamental DL limitation.
+- **Ablation** (`masking/sst_cnn_ablation.py`, `sst_arch_explore.py`): a compact CNN with **flatten head, batch 16, 2 conv, no input-dropout, early-stopped** reaches **0.90/0.77** — competitive with logistic (within ~0.02; logistic still marginally best → task is largely linear). GAP→flatten is the big lever; depth/weight-decay/pooling-variants neutral.
+- **DECISION: adopt backbone = flatten head, 2 conv [16,32]+maxpool, bs16, no input-dropout, Adam 1e-3, ~120ep early-stop.** Honest SST framing: naive CNN < linear; ablation explains+fixes it; well-specified CNN matches the linear ceiling and adds faithful attribution.
+- **TODO:** re-run mask/attribution (`sst_model_select`/`sst_methods_compare`) on the flatten backbone; regenerate ENSO figures/tables; rewrite §ENSO to this story (and the predictor-specification point gets even stronger).
 - [ ] ⏸ (then) revisit the **linear-signal regime** + insertion/deletion metric.
 
 ## Phase 4 — ENSO application: rehab + statistical reference
